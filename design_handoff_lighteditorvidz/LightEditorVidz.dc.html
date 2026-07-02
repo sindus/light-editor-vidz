@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#0b0b0f; }
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,0.12); border-radius:9px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  input,button,select{ font-family:inherit; }
+  :root{ --accent:#5c86ff; --accent2:#a45cff; }
+  @keyframes lev-pulse{ 0%,100%{ opacity:.55 } 50%{ opacity:1 } }
+  @keyframes lev-pop{ from{ transform:scale(.96); opacity:0 } to{ transform:scale(1); opacity:1 } }
+  @keyframes lev-fade{ from{ opacity:0 } to{ opacity:1 } }
+</style>
+</helmet>
+
+<div style="height:100vh; width:100%; overflow:hidden; background:#0f0f15; color:#e9e9f0; font-family:'Manrope',system-ui,sans-serif; position:relative; -webkit-font-smoothing:antialiased;">
+
+  <!-- ============ HOME ============ -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <div style="height:100vh; display:flex; flex-direction:column; background:radial-gradient(1200px 600px at 80% -10%, rgba(92,134,255,0.14), transparent 60%), radial-gradient(900px 500px at 0% 110%, rgba(164,92,255,0.12), transparent 55%), #0f0f15;">
+    <!-- title bar -->
+    <div style="height:44px; display:flex; align-items:center; gap:9px; padding:0 16px; flex-shrink:0;">
+      <div style="display:flex; gap:7px;">
+        <span style="width:12px; height:12px; border-radius:50%; background:#ff5f57;"></span>
+        <span style="width:12px; height:12px; border-radius:50%; background:#febc2e;"></span>
+        <span style="width:12px; height:12px; border-radius:50%; background:#28c840;"></span>
+      </div>
+    </div>
+
+    <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 40px; gap:52px;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:22px; text-align:center;">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <div style="width:56px; height:56px; border-radius:15px; background:linear-gradient(135deg, var(--accent), var(--accent2)); display:flex; align-items:center; justify-content:center; box-shadow:0 10px 34px rgba(92,134,255,0.4);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M9 8l7 4-7 4V8z" fill="#fff"/></svg>
+          </div>
+          <div style="text-align:left;">
+            <div style="font-size:26px; font-weight:800; letter-spacing:-0.02em;">LightEditor<span style="color:var(--accent);">Vidz</span></div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6b78; letter-spacing:0.14em; text-transform:uppercase;">Video Editor · v1.0</div>
+          </div>
+        </div>
+        <div style="font-size:15px; color:#9a9aa8; max-width:440px; line-height:1.55;">Montez vos vidéos, ajoutez du texte, des images, du son et des formes — le tout sur une timeline fluide.</div>
+      </div>
+
+      <div style="display:flex; gap:14px;">
+        <button onClick="{{ openModal }}" style="display:flex; align-items:center; gap:10px; padding:15px 26px; border:none; border-radius:13px; background:linear-gradient(135deg, var(--accent), var(--accent2)); color:#fff; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 10px 30px rgba(92,134,255,0.36);" style-hover="filter:brightness(1.08); transform:translateY(-1px);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+          Nouveau projet
+        </button>
+        <button style="display:flex; align-items:center; gap:10px; padding:15px 22px; border:1px solid rgba(255,255,255,0.12); border-radius:13px; background:rgba(255,255,255,0.04); color:#e9e9f0; font-size:15px; font-weight:600; cursor:pointer;" style-hover="background:rgba(255,255,255,0.08);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 5h14v14H5zM5 9h14" stroke="#c9c9d4" stroke-width="1.7"/></svg>
+          Ouvrir un projet
+        </button>
+      </div>
+
+      <!-- recent -->
+      <div style="width:100%; max-width:760px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+          <span style="font-size:13px; font-weight:700; color:#c9c9d4; letter-spacing:0.02em;">Projets récents</span>
+          <span style="font-size:12px; color:#6b6b78;">4 projets</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px;">
+          <div onClick="{{ createProject }}" style="cursor:pointer;" style-hover="transform:translateY(-2px);">
+            <div style="aspect-ratio:16/10; border-radius:11px; background:repeating-linear-gradient(135deg,#1a1a22 0 10px,#15151c 10px 20px); border:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; justify-content:center;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#5a5a68;">16:9</span>
+            </div>
+            <div style="margin-top:9px; font-size:13px; font-weight:600;">Vlog Été 2026</div>
+            <div style="font-size:11px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">1920×1080 · il y a 2h</div>
+          </div>
+          <div onClick="{{ createProject }}" style="cursor:pointer;" style-hover="transform:translateY(-2px);">
+            <div style="aspect-ratio:16/10; border-radius:11px; background:repeating-linear-gradient(135deg,#1a1a22 0 10px,#15151c 10px 20px); border:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; justify-content:center;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#5a5a68;">9:16</span>
+            </div>
+            <div style="margin-top:9px; font-size:13px; font-weight:600;">Reel Produit</div>
+            <div style="font-size:11px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">1080×1920 · hier</div>
+          </div>
+          <div onClick="{{ createProject }}" style="cursor:pointer;" style-hover="transform:translateY(-2px);">
+            <div style="aspect-ratio:16/10; border-radius:11px; background:repeating-linear-gradient(135deg,#1a1a22 0 10px,#15151c 10px 20px); border:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; justify-content:center;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#5a5a68;">1:1</span>
+            </div>
+            <div style="margin-top:9px; font-size:13px; font-weight:600;">Pub Insta</div>
+            <div style="font-size:11px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">1080×1080 · 3 j</div>
+          </div>
+          <div onClick="{{ createProject }}" style="cursor:pointer;" style-hover="transform:translateY(-2px);">
+            <div style="aspect-ratio:16/10; border-radius:11px; background:repeating-linear-gradient(135deg,#1a1a22 0 10px,#15151c 10px 20px); border:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; justify-content:center;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#5a5a68;">4K</span>
+            </div>
+            <div style="margin-top:9px; font-size:13px; font-weight:600;">Aftermovie</div>
+            <div style="font-size:11px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">3840×2160 · 1 sem</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ EDITOR ============ -->
+  <sc-if value="{{ isEditor }}" hint-placeholder-val="{{ true }}">
+  <div style="height:100vh; display:flex; flex-direction:column; background:#0f0f15;">
+
+    <!-- TOP BAR -->
+    <div style="height:50px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 14px; border-bottom:1px solid rgba(255,255,255,0.07); background:#131319;">
+      <div style="display:flex; align-items:center; gap:16px;">
+        <div style="display:flex; align-items:center; gap:9px; cursor:pointer;" onClick="{{ goHome }}">
+          <div style="width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 8l7 4-7 4V8z" fill="#fff"/></svg>
+          </div>
+          <span style="font-weight:800; font-size:14px; letter-spacing:-0.01em;">LightEditor<span style="color:var(--accent);">Vidz</span></span>
+        </div>
+        <div style="width:1px; height:20px; background:rgba(255,255,255,0.1);"></div>
+        <div style="display:flex; gap:2px; font-size:12.5px; color:#9a9aa8;">
+          <span style="padding:5px 9px; border-radius:6px; cursor:pointer;" style-hover="background:rgba(255,255,255,0.06); color:#fff;">Fichier</span>
+          <span style="padding:5px 9px; border-radius:6px; cursor:pointer;" style-hover="background:rgba(255,255,255,0.06); color:#fff;">Édition</span>
+          <span style="padding:5px 9px; border-radius:6px; cursor:pointer;" style-hover="background:rgba(255,255,255,0.06); color:#fff;">Affichage</span>
+          <span style="padding:5px 9px; border-radius:6px; cursor:pointer;" style-hover="background:rgba(255,255,255,0.06); color:#fff;">Aide</span>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:13px; font-weight:600;">{{ projectName }}</span>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6b78; padding:3px 8px; border-radius:5px; background:rgba(255,255,255,0.05);">{{ resLabel }} · {{ fps }}fps</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:9px;">
+        <button style="display:flex; align-items:center; gap:7px; padding:8px 12px; border:1px solid rgba(255,255,255,0.12); border-radius:9px; background:rgba(255,255,255,0.04); color:#e9e9f0; font-size:12.5px; font-weight:600; cursor:pointer;" style-hover="background:rgba(255,255,255,0.08);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" stroke="#c9c9d4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Enregistrer
+        </button>
+        <button style="display:flex; align-items:center; gap:7px; padding:8px 15px; border:none; border-radius:9px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:12.5px; font-weight:700; cursor:pointer; box-shadow:0 5px 16px rgba(92,134,255,0.32);" style-hover="filter:brightness(1.08);">
+          Exporter
+        </button>
+      </div>
+    </div>
+
+    <!-- MIDDLE -->
+    <div style="flex:1; display:flex; min-height:0;">
+
+      <!-- LEFT: category rail -->
+      <div style="width:74px; flex-shrink:0; background:#131319; border-right:1px solid rgba(255,255,255,0.07); display:flex; flex-direction:column; align-items:center; padding-top:12px; gap:5px;">
+        <div onClick="{{ tabTextClick }}" style="width:58px; padding:9px 0; border-radius:11px; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; color:#9a9aa8; background:{{ tabTextBg }};" style-hover="color:#fff;">
+          <span style="font-weight:800; font-size:19px; line-height:1; color:{{ tabTextFg }};">T</span>
+          <span style="font-size:10px; font-weight:600; color:{{ tabTextFg }};">Texte</span>
+        </div>
+        <div onClick="{{ tabVideoClick }}" style="width:58px; padding:9px 0; border-radius:11px; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; color:#9a9aa8; background:{{ tabVideoBg }};" style-hover="color:#fff;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="13" height="12" rx="2" stroke="{{ tabVideoFg }}" stroke-width="1.7"/><path d="M16 10l5-3v10l-5-3z" stroke="{{ tabVideoFg }}" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          <span style="font-size:10px; font-weight:600; color:{{ tabVideoFg }};">Vidéos</span>
+        </div>
+        <div onClick="{{ tabImageClick }}" style="width:58px; padding:9px 0; border-radius:11px; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; color:#9a9aa8; background:{{ tabImageBg }};" style-hover="color:#fff;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="{{ tabImageFg }}" stroke-width="1.7"/><circle cx="8.5" cy="9.5" r="1.8" fill="{{ tabImageFg }}"/><path d="M4 18l5-5 4 4 3-3 4 4" stroke="{{ tabImageFg }}" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          <span style="font-size:10px; font-weight:600; color:{{ tabImageFg }};">Images</span>
+        </div>
+        <div onClick="{{ tabAudioClick }}" style="width:58px; padding:9px 0; border-radius:11px; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; color:#9a9aa8; background:{{ tabAudioBg }};" style-hover="color:#fff;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 17V6l10-2v11" stroke="{{ tabAudioFg }}" stroke-width="1.7" stroke-linejoin="round"/><circle cx="6.5" cy="17.5" r="2.5" stroke="{{ tabAudioFg }}" stroke-width="1.7"/><circle cx="16.5" cy="15.5" r="2.5" stroke="{{ tabAudioFg }}" stroke-width="1.7"/></svg>
+          <span style="font-size:10px; font-weight:600; color:{{ tabAudioFg }};">Audio</span>
+        </div>
+        <div onClick="{{ tabShapeClick }}" style="width:58px; padding:9px 0; border-radius:11px; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; color:#9a9aa8; background:{{ tabShapeBg }};" style-hover="color:#fff;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="9" height="9" rx="1.5" stroke="{{ tabShapeFg }}" stroke-width="1.7"/><circle cx="16" cy="16" r="4.5" stroke="{{ tabShapeFg }}" stroke-width="1.7"/></svg>
+          <span style="font-size:10px; font-weight:600; color:{{ tabShapeFg }};">Formes</span>
+        </div>
+      </div>
+
+      <!-- LEFT: library panel -->
+      <div style="width:264px; flex-shrink:0; background:#16161d; border-right:1px solid rgba(255,255,255,0.07); display:flex; flex-direction:column; min-height:0;">
+        <div style="padding:15px 16px 11px; display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:14px; font-weight:700;">{{ tabTitle }}</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b6b78;">CLIC POUR AJOUTER</span>
+        </div>
+        <div style="padding:0 14px 12px;">
+          <div style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.07);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#6b6b78" stroke-width="1.8"/><path d="M20 20l-3-3" stroke="#6b6b78" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span style="font-size:12px; color:#6b6b78;">Rechercher…</span>
+          </div>
+        </div>
+
+        <div style="flex:1; overflow-y:auto; padding:0 14px 16px;">
+          <!-- TEXT -->
+          <sc-if value="{{ tabText }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:9px; animation:lev-fade .2s ease;">
+            <div onClick="{{ addTitle }}" style="padding:20px 16px; border-radius:11px; background:linear-gradient(135deg,#20202a,#1a1a22); border:1px solid rgba(255,255,255,0.08); cursor:pointer; text-align:center;" style-hover="border-color:var(--accent2);">
+              <span style="font-size:24px; font-weight:800; letter-spacing:-0.02em;">Ajouter un titre</span>
+            </div>
+            <div onClick="{{ addTitle }}" style="padding:15px 16px; border-radius:11px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); cursor:pointer; text-align:center;" style-hover="border-color:var(--accent2);">
+              <span style="font-size:16px; font-weight:600;">Sous-titre par défaut</span>
+            </div>
+            <div style="font-size:11px; color:#6b6b78; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin:8px 2px 2px;">Styles animés</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px;">
+              <div onClick="{{ addTitle }}" style="aspect-ratio:16/10; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:var(--accent2);"><span style="font-weight:800; font-size:14px; background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent;">Néon</span></div>
+              <div onClick="{{ addTitle }}" style="aspect-ratio:16/10; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:var(--accent2);"><span style="font-weight:800; font-size:14px; color:#fff; text-shadow:2px 2px 0 var(--accent);">Ombre</span></div>
+              <div onClick="{{ addTitle }}" style="aspect-ratio:16/10; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:var(--accent2);"><span style="font-weight:800; font-size:14px; color:#111; background:#fff; padding:2px 7px; border-radius:4px;">Boîte</span></div>
+              <div onClick="{{ addTitle }}" style="aspect-ratio:16/10; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:var(--accent2);"><span style="font-weight:800; font-size:14px; color:#fff; letter-spacing:0.22em;">SPACÉ</span></div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- VIDEO -->
+          <sc-if value="{{ tabVideo }}" hint-placeholder-val="{{ true }}">
+          <div style="animation:lev-fade .2s ease;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px;">
+              <div onClick="{{ addVideo }}" style="cursor:pointer;" style-hover="opacity:.85;">
+                <div style="aspect-ratio:16/10; border-radius:10px; background:repeating-linear-gradient(135deg,#1e2740 0 9px,#182036 9px 18px); border:1px solid rgba(92,134,255,0.25); display:flex; align-items:flex-end; padding:7px; position:relative;">
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#8fa8ff; background:rgba(0,0,0,0.4); padding:2px 5px; border-radius:4px;">00:12</span>
+                </div>
+                <div style="font-size:11px; margin-top:5px; color:#c9c9d4;">plage_coucher.mp4</div>
+              </div>
+              <div onClick="{{ addVideo }}" style="cursor:pointer;" style-hover="opacity:.85;">
+                <div style="aspect-ratio:16/10; border-radius:10px; background:repeating-linear-gradient(135deg,#1e2740 0 9px,#182036 9px 18px); border:1px solid rgba(92,134,255,0.25); display:flex; align-items:flex-end; padding:7px;">
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#8fa8ff; background:rgba(0,0,0,0.4); padding:2px 5px; border-radius:4px;">00:34</span>
+                </div>
+                <div style="font-size:11px; margin-top:5px; color:#c9c9d4;">ville_nuit.mp4</div>
+              </div>
+              <div onClick="{{ addVideo }}" style="cursor:pointer;" style-hover="opacity:.85;">
+                <div style="aspect-ratio:16/10; border-radius:10px; background:repeating-linear-gradient(135deg,#1e2740 0 9px,#182036 9px 18px); border:1px solid rgba(92,134,255,0.25); display:flex; align-items:flex-end; padding:7px;">
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#8fa8ff; background:rgba(0,0,0,0.4); padding:2px 5px; border-radius:4px;">01:05</span>
+                </div>
+                <div style="font-size:11px; margin-top:5px; color:#c9c9d4;">interview.mp4</div>
+              </div>
+              <div style="aspect-ratio:16/10; border-radius:10px; border:1.5px dashed rgba(255,255,255,0.15); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; cursor:pointer; color:#9a9aa8;" style-hover="border-color:var(--accent); color:#fff;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <span style="font-size:11px;">Importer</span>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- IMAGE -->
+          <sc-if value="{{ tabImage }}" hint-placeholder-val="{{ true }}">
+          <div style="animation:lev-fade .2s ease;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px;">
+              <div onClick="{{ addImage }}" style="aspect-ratio:1; border-radius:10px; background:repeating-linear-gradient(135deg,#1e3630 0 9px,#173029 9px 18px); border:1px solid rgba(47,196,182,0.28); cursor:pointer; display:flex; align-items:center; justify-content:center;" style-hover="opacity:.85;"><span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:#57d6c8;">logo.png</span></div>
+              <div onClick="{{ addImage }}" style="aspect-ratio:1; border-radius:10px; background:repeating-linear-gradient(135deg,#1e3630 0 9px,#173029 9px 18px); border:1px solid rgba(47,196,182,0.28); cursor:pointer; display:flex; align-items:center; justify-content:center;" style-hover="opacity:.85;"><span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:#57d6c8;">photo_1</span></div>
+              <div onClick="{{ addImage }}" style="aspect-ratio:1; border-radius:10px; background:repeating-linear-gradient(135deg,#1e3630 0 9px,#173029 9px 18px); border:1px solid rgba(47,196,182,0.28); cursor:pointer; display:flex; align-items:center; justify-content:center;" style-hover="opacity:.85;"><span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:#57d6c8;">sticker</span></div>
+              <div style="aspect-ratio:1; border-radius:10px; border:1.5px dashed rgba(255,255,255,0.15); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; cursor:pointer; color:#9a9aa8;" style-hover="border-color:var(--accent); color:#fff;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <span style="font-size:11px;">Importer</span>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- AUDIO -->
+          <sc-if value="{{ tabAudio }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:8px; animation:lev-fade .2s ease;">
+            <div onClick="{{ addAudio }}" style="display:flex; align-items:center; gap:11px; padding:11px; border-radius:10px; background:#1a1a22; border:1px solid rgba(56,209,122,0.22); cursor:pointer;" style-hover="border-color:#38d17a;">
+              <div style="width:38px; height:38px; border-radius:9px; background:rgba(56,209,122,0.14); display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 17V6l10-2v11" stroke="#38d17a" stroke-width="1.7" stroke-linejoin="round"/><circle cx="6.5" cy="17.5" r="2.3" stroke="#38d17a" stroke-width="1.7"/><circle cx="16.5" cy="15.5" r="2.3" stroke="#38d17a" stroke-width="1.7"/></svg></div>
+              <div style="flex:1;"><div style="font-size:13px; font-weight:600;">Summer Groove</div><div style="font-size:11px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">02:14 · Lo-fi</div></div>
+            </div>
+            <div onClick="{{ addAudio }}" style="display:flex; align-items:center; gap:11px; padding:11px; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); cursor:pointer;" style-hover="border-color:#38d17a;">
+              <div style="width:38px; height:38px; border-radius:9px; background:rgba(56,209,122,0.14); display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 17V6l10-2v11" stroke="#38d17a" stroke-width="1.7" stroke-linejoin="round"/><circle cx="6.5" cy="17.5" r="2.3" stroke="#38d17a" stroke-width="1.7"/><circle cx="16.5" cy="15.5" r="2.3" stroke="#38d17a" stroke-width="1.7"/></svg></div>
+              <div style="flex:1;"><div style="font-size:13px; font-weight:600;">Upbeat Intro</div><div style="font-size:11px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">00:18 · SFX</div></div>
+            </div>
+            <div onClick="{{ addAudio }}" style="display:flex; align-items:center; gap:11px; padding:11px; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); cursor:pointer;" style-hover="border-color:#38d17a;">
+              <div style="width:38px; height:38px; border-radius:9px; background:rgba(56,209,122,0.14); display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3v11" stroke="#38d17a" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="3" stroke="#38d17a" stroke-width="1.7"/></svg></div>
+              <div style="flex:1;"><div style="font-size:13px; font-weight:600;">Voix off</div><div style="font-size:11px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">Enregistrer…</div></div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- SHAPES -->
+          <sc-if value="{{ tabShape }}" hint-placeholder-val="{{ true }}">
+          <div style="animation:lev-fade .2s ease;">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px;">
+              <div onClick="{{ addShape }}" style="aspect-ratio:1; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#ff8a5c;"><div style="width:26px; height:26px; border-radius:5px; background:#ff8a5c;"></div></div>
+              <div onClick="{{ addShape }}" style="aspect-ratio:1; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#ff8a5c;"><div style="width:28px; height:28px; border-radius:50%; background:#ff8a5c;"></div></div>
+              <div onClick="{{ addShape }}" style="aspect-ratio:1; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#ff8a5c;"><div style="width:0; height:0; border-left:15px solid transparent; border-right:15px solid transparent; border-bottom:26px solid #ff8a5c;"></div></div>
+              <div onClick="{{ addShape }}" style="aspect-ratio:1; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#ff8a5c;"><svg width="30" height="30" viewBox="0 0 24 24"><path d="M12 3l2.5 6H21l-5 4 2 7-6-4-6 4 2-7-5-4h6.5z" fill="#ff8a5c"/></svg></div>
+              <div onClick="{{ addShape }}" style="aspect-ratio:1; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#ff8a5c;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 12h13m0 0l-5-5m5 5l-5 5" stroke="#ff8a5c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <div onClick="{{ addShape }}" style="aspect-ratio:1; border-radius:10px; background:#1a1a22; border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#ff8a5c;"><div style="width:28px; height:6px; border-radius:3px; background:#ff8a5c;"></div></div>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- CENTER -->
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0; background:#0b0b0f;">
+        <!-- canvas toolbar -->
+        <div style="height:42px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 14px; border-bottom:1px solid rgba(255,255,255,0.06);">
+          <div style="display:flex; gap:3px;">
+            <div style="width:30px; height:30px; border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#9a9aa8;" style-hover="background:rgba(255,255,255,0.06); color:#fff;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 010 10h-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div style="width:30px; height:30px; border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#9a9aa8;" style-hover="background:rgba(255,255,255,0.06); color:#fff;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 14l5-5-5-5M20 9H9a5 5 0 000 10h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div style="width:1px; height:18px; background:rgba(255,255,255,0.1); margin:6px 5px;"></div>
+            <div style="width:30px; height:30px; border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#9a9aa8;" style-hover="background:rgba(255,255,255,0.06); color:#fff;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 9V5h4M15 5h4v4M19 15v4h-4M9 19H5v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#9a9aa8;">
+            <span style="cursor:pointer;">−</span>
+            <span>fit · 68%</span>
+            <span style="cursor:pointer;">+</span>
+          </div>
+        </div>
+
+        <!-- canvas stage -->
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:34px; min-height:0;">
+          <div style="width:min(100%, 76vh*16/9); max-width:860px; aspect-ratio:16/9; container-type:size; background:linear-gradient(160deg,#2a3358,#171b2e 55%,#0f1120); border-radius:8px; position:relative; box-shadow:0 24px 70px rgba(0,0,0,0.6); overflow:hidden;">
+            <!-- faux video bg -->
+            <div style="position:absolute; inset:0; background:repeating-linear-gradient(115deg, rgba(255,255,255,0.02) 0 22px, transparent 22px 44px);"></div>
+            <div style="position:absolute; inset:0; background:radial-gradient(400px 240px at 30% 25%, rgba(92,134,255,0.22), transparent 70%);"></div>
+
+            <!-- safe margins -->
+            <sc-if value="{{ showSafe }}">
+            <div style="position:absolute; inset:6.5%; border:1px dashed rgba(255,255,255,0.22); border-radius:3px; pointer-events:none;"></div>
+            </sc-if>
+
+            <!-- logo element -->
+            <div onClick="{{ selLogoClick }}" style="position:absolute; left:6%; top:8%; width:11cqw; height:11cqw; border-radius:1.6cqw; background:repeating-linear-gradient(135deg,#1e3630 0 8px,#173029 8px 16px); border:1px solid rgba(47,196,182,0.4); display:flex; align-items:center; justify-content:center; cursor:pointer; outline:{{ selLogoOutline }}; outline-offset:2px;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:1.5cqw; color:#57d6c8;">logo</span>
+              <sc-if value="{{ selLogo }}"><div style="position:absolute; inset:-3px; border:1.5px solid #2fc4b6; border-radius:13px; pointer-events:none;"></div><div style="position:absolute; right:-4px; bottom:-4px; width:9px; height:9px; background:#2fc4b6; border-radius:2px; border:1.5px solid #0b0b0f;"></div></sc-if>
+            </div>
+
+            <!-- title text -->
+            <div onClick="{{ selTitleClick }}" style="position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); cursor:pointer; text-align:center; padding:6px 10px; outline:{{ selTitleOutline }}; outline-offset:5px;">
+              <div style="font-size:6.6cqw; font-weight:800; letter-spacing:-0.02em; color:#fff; text-shadow:0 3px 20px rgba(0,0,0,0.5); white-space:nowrap;">Vlog Été 2026</div>
+              <sc-if value="{{ selTitle }}">
+                <div style="position:absolute; inset:-2px; border:1.5px solid var(--accent2); border-radius:5px; pointer-events:none;"></div>
+                <div style="position:absolute; left:-5px; top:-5px; width:9px; height:9px; background:var(--accent2); border-radius:2px; border:1.5px solid #0b0b0f;"></div>
+                <div style="position:absolute; right:-5px; top:-5px; width:9px; height:9px; background:var(--accent2); border-radius:2px; border:1.5px solid #0b0b0f;"></div>
+                <div style="position:absolute; left:-5px; bottom:-5px; width:9px; height:9px; background:var(--accent2); border-radius:2px; border:1.5px solid #0b0b0f;"></div>
+                <div style="position:absolute; right:-5px; bottom:-5px; width:9px; height:9px; background:var(--accent2); border-radius:2px; border:1.5px solid #0b0b0f;"></div>
+              </sc-if>
+            </div>
+
+            <!-- subtitle -->
+            <div onClick="{{ selSubClick }}" style="position:absolute; left:50%; top:62%; transform:translateX(-50%); cursor:pointer; padding:5px 12px; border-radius:5px; background:rgba(0,0,0,0.35); outline:{{ selSubOutline }}; outline-offset:3px;">
+              <span style="font-size:2.7cqw; font-weight:600; color:#fff; white-space:nowrap;">Épisode 4 — La côte Atlantique</span>
+              <sc-if value="{{ selSub }}"><div style="position:absolute; inset:-2px; border:1.5px solid var(--accent2); border-radius:6px; pointer-events:none;"></div></sc-if>
+            </div>
+          </div>
+        </div>
+
+        <!-- playback bar -->
+        <div style="height:46px; flex-shrink:0; display:flex; align-items:center; justify-content:center; gap:18px; border-top:1px solid rgba(255,255,255,0.06); background:#0f0f15;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="cursor:pointer;"><path d="M19 5v14M15 12L6 5v14l9-7z" fill="#c9c9d4"/></svg>
+            <div onClick="{{ togglePlay }}" style="width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 14px rgba(92,134,255,0.4);">
+              <sc-if value="{{ playing }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></sc-if>
+              <sc-if value="{{ notPlaying }}" hint-placeholder-val="{{ true }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M8 5l11 7-11 7V5z"/></svg></sc-if>
+            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="cursor:pointer;"><path d="M5 5v14M9 12l9 7V5l-9 7z" fill="#c9c9d4"/></svg>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#9a9aa8;"><span style="color:#fff;">00:04:12</span> / 00:30:00</div>
+        </div>
+      </div>
+
+      <!-- RIGHT: properties -->
+      <div style="width:300px; flex-shrink:0; background:#16161d; border-left:1px solid rgba(255,255,255,0.07); display:flex; flex-direction:column; min-height:0;">
+        <sc-if value="{{ showTextProps }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; min-height:0; animation:lev-pop .2s ease;">
+          <div style="padding:15px 16px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; gap:10px;">
+            <div style="width:30px; height:30px; border-radius:8px; background:rgba(164,92,255,0.16); display:flex; align-items:center; justify-content:center; font-weight:800; color:#c49bff;">T</div>
+            <div style="flex:1;"><div style="font-size:13px; font-weight:700;">Propriétés du texte</div><div style="font-size:11px; color:#6b6b78;">Calque sélectionné</div></div>
+          </div>
+          <div style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:18px;">
+            <div>
+              <div style="font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;">Contenu</div>
+              <div style="padding:10px 12px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-size:13px;">Vlog Été 2026</div>
+            </div>
+            <div>
+              <div style="font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;">Police</div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-size:13px;">Manrope ExtraBold <span style="color:#6b6b78;">▾</span></div>
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <div style="flex:1; display:flex; align-items:center; justify-content:space-between; padding:9px 11px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-family:'JetBrains Mono',monospace; font-size:12px;">46 px</div>
+                <div style="display:flex; gap:4px;">
+                  <div style="width:38px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); display:flex; align-items:center; justify-content:center; font-weight:800; cursor:pointer;">B</div>
+                  <div style="width:38px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); display:flex; align-items:center; justify-content:center; font-style:italic; cursor:pointer; color:#9a9aa8;">I</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;">Couleur</div>
+              <div style="display:flex; gap:8px;">
+                <div style="width:34px; height:34px; border-radius:9px; background:#fff; border:2px solid var(--accent); cursor:pointer;"></div>
+                <div style="width:34px; height:34px; border-radius:9px; background:#111; border:1px solid rgba(255,255,255,0.15); cursor:pointer;"></div>
+                <div style="width:34px; height:34px; border-radius:9px; background:var(--accent); cursor:pointer;"></div>
+                <div style="width:34px; height:34px; border-radius:9px; background:#ffcf5c; cursor:pointer;"></div>
+                <div style="width:34px; height:34px; border-radius:9px; background:#ff6b8a; cursor:pointer;"></div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;">Alignement</div>
+              <div style="display:flex; gap:6px;">
+                <div style="flex:1; height:34px; border-radius:8px; background:rgba(92,134,255,0.16); border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+                <div style="flex:1; height:34px; border-radius:8px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M6 18h12" stroke="#9a9aa8" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+                <div style="flex:1; height:34px; border-radius:8px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24"><path d="M4 6h16M10 12h10M7 18h13" stroke="#9a9aa8" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:9px;"><span>Opacité</span><span style="font-family:'JetBrains Mono',monospace; color:#c9c9d4;">100%</span></div>
+              <div style="height:5px; border-radius:3px; background:#0f0f15; position:relative;"><div style="position:absolute; left:0; top:0; bottom:0; width:100%; border-radius:3px; background:linear-gradient(90deg,var(--accent),var(--accent2));"></div><div style="position:absolute; right:-6px; top:50%; transform:translateY(-50%); width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div></div>
+            </div>
+            <div>
+              <div style="font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:9px;">Animation</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:7px;">
+                <div style="padding:9px; border-radius:8px; background:rgba(92,134,255,0.14); border:1px solid var(--accent); font-size:12px; text-align:center; cursor:pointer;">Fondu ↗</div>
+                <div style="padding:9px; border-radius:8px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-size:12px; text-align:center; cursor:pointer; color:#9a9aa8;">Glisser</div>
+                <div style="padding:9px; border-radius:8px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-size:12px; text-align:center; cursor:pointer; color:#9a9aa8;">Zoom</div>
+                <div style="padding:9px; border-radius:8px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-size:12px; text-align:center; cursor:pointer; color:#9a9aa8;">Machine</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ showImageProps }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; min-height:0; animation:lev-pop .2s ease;">
+          <div style="padding:15px 16px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; gap:10px;">
+            <div style="width:30px; height:30px; border-radius:8px; background:rgba(47,196,182,0.16); display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="#57d6c8" stroke-width="1.7"/><circle cx="8.5" cy="9.5" r="1.6" fill="#57d6c8"/><path d="M4 18l5-5 4 4 3-3 4 4" stroke="#57d6c8" stroke-width="1.7" stroke-linejoin="round"/></svg></div>
+            <div style="flex:1;"><div style="font-size:13px; font-weight:700;">Propriétés de l'image</div><div style="font-size:11px; color:#6b6b78;">logo.png</div></div>
+          </div>
+          <div style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:18px;">
+            <div>
+              <div style="font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;">Position</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <div style="display:flex; align-items:center; gap:7px; padding:9px 11px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-family:'JetBrains Mono',monospace; font-size:12px;"><span style="color:#6b6b78;">X</span> 96</div>
+                <div style="display:flex; align-items:center; gap:7px; padding:9px 11px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-family:'JetBrains Mono',monospace; font-size:12px;"><span style="color:#6b6b78;">Y</span> 74</div>
+                <div style="display:flex; align-items:center; gap:7px; padding:9px 11px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-family:'JetBrains Mono',monospace; font-size:12px;"><span style="color:#6b6b78;">W</span> 220</div>
+                <div style="display:flex; align-items:center; gap:7px; padding:9px 11px; border-radius:9px; background:#0f0f15; border:1px solid rgba(255,255,255,0.09); font-family:'JetBrains Mono',monospace; font-size:12px;"><span style="color:#6b6b78;">H</span> 220</div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:9px;"><span>Arrondi</span><span style="font-family:'JetBrains Mono',monospace; color:#c9c9d4;">12 px</span></div>
+              <div style="height:5px; border-radius:3px; background:#0f0f15; position:relative;"><div style="position:absolute; left:0; top:0; bottom:0; width:26%; border-radius:3px; background:linear-gradient(90deg,var(--accent),var(--accent2));"></div><div style="position:absolute; left:26%; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; background:#fff;"></div></div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:9px;"><span>Opacité</span><span style="font-family:'JetBrains Mono',monospace; color:#c9c9d4;">100%</span></div>
+              <div style="height:5px; border-radius:3px; background:#0f0f15; position:relative;"><div style="position:absolute; left:0; top:0; bottom:0; width:100%; border-radius:3px; background:linear-gradient(90deg,var(--accent),var(--accent2));"></div><div style="position:absolute; right:-6px; top:50%; transform:translateY(-50%); width:14px; height:14px; border-radius:50%; background:#fff;"></div></div>
+            </div>
+            <div>
+              <div style="font-size:11px; font-weight:700; color:#9a9aa8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:9px;">Filtres</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px;">
+                <div style="aspect-ratio:1; border-radius:8px; background:repeating-linear-gradient(135deg,#1e3630 0 6px,#173029 6px 12px); border:1px solid var(--accent); display:flex; align-items:flex-end; padding:4px; font-size:9px;">Original</div>
+                <div style="aspect-ratio:1; border-radius:8px; background:repeating-linear-gradient(135deg,#333 0 6px,#222 6px 12px); border:1px solid rgba(255,255,255,0.09); display:flex; align-items:flex-end; padding:4px; font-size:9px; color:#9a9aa8;">N&B</div>
+                <div style="aspect-ratio:1; border-radius:8px; background:repeating-linear-gradient(135deg,#3a2e1e 0 6px,#2e2417 6px 12px); border:1px solid rgba(255,255,255,0.09); display:flex; align-items:flex-end; padding:4px; font-size:9px; color:#9a9aa8;">Chaud</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ noSelection }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:30px; text-align:center;">
+          <div style="width:52px; height:52px; border-radius:13px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 4l7 16 2-7 7-2L4 4z" stroke="#6b6b78" stroke-width="1.7" stroke-linejoin="round"/></svg></div>
+          <div style="font-size:13px; font-weight:600; color:#9a9aa8;">Aucun élément sélectionné</div>
+          <div style="font-size:12px; color:#6b6b78; line-height:1.5; max-width:200px;">Cliquez sur un élément du canvas ou de la timeline pour voir ses propriétés.</div>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div style="height:230px; flex-shrink:0; background:#131319; border-top:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column;">
+      <!-- timeline toolbar -->
+      <div style="height:40px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 14px; border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div style="display:flex; gap:4px;">
+          <div style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:7px; background:rgba(255,255,255,0.05); font-size:12px; font-weight:600; cursor:pointer;" style-hover="background:rgba(255,255,255,0.09);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 3v18l14-9L6 3z" stroke="#c9c9d4" stroke-width="1.6" stroke-linejoin="round"/></svg>Diviser</div>
+          <div style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:7px; font-size:12px; color:#9a9aa8; cursor:pointer;" style-hover="background:rgba(255,255,255,0.06); color:#fff;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Supprimer</div>
+          <div style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:7px; font-size:12px; color:#9a9aa8; cursor:pointer;" style-hover="background:rgba(255,255,255,0.06); color:#fff;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V5h10" stroke="currentColor" stroke-width="1.6"/></svg>Dupliquer</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#9a9aa8;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="cursor:pointer;"><circle cx="11" cy="11" r="7" stroke="#9a9aa8" stroke-width="1.7"/><path d="M11 8v6M8 11h6" stroke="#9a9aa8" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <div style="width:90px; height:5px; border-radius:3px; background:#0f0f15; position:relative;"><div style="position:absolute; left:38%; top:50%; transform:translate(-50%,-50%); width:12px; height:12px; border-radius:50%; background:#fff;"></div></div>
+        </div>
+      </div>
+
+      <!-- ruler + tracks -->
+      <div style="flex:1; display:flex; min-height:0;">
+        <!-- track labels -->
+        <div style="width:104px; flex-shrink:0; border-right:1px solid rgba(255,255,255,0.06); padding-top:24px;">
+          <div style="height:36px; display:flex; align-items:center; gap:8px; padding:0 12px;"><span style="width:8px; height:8px; border-radius:2px; background:var(--accent2);"></span><span style="font-size:11px; font-weight:600; color:#c9c9d4;">Texte</span></div>
+          <div style="height:36px; display:flex; align-items:center; gap:8px; padding:0 12px;"><span style="width:8px; height:8px; border-radius:2px; background:var(--accent);"></span><span style="font-size:11px; font-weight:600; color:#c9c9d4;">Vidéo</span></div>
+          <div style="height:36px; display:flex; align-items:center; gap:8px; padding:0 12px;"><span style="width:8px; height:8px; border-radius:2px; background:#2fc4b6;"></span><span style="font-size:11px; font-weight:600; color:#c9c9d4;">Image</span></div>
+          <div style="height:36px; display:flex; align-items:center; gap:8px; padding:0 12px;"><span style="width:8px; height:8px; border-radius:2px; background:#38d17a;"></span><span style="font-size:11px; font-weight:600; color:#c9c9d4;">Audio</span></div>
+        </div>
+
+        <!-- track lanes -->
+        <div style="flex:1; position:relative; overflow-x:auto; overflow-y:hidden;">
+          <!-- ruler -->
+          <div style="height:24px; display:flex; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.06); font-family:'JetBrains Mono',monospace; font-size:9px; color:#6b6b78; min-width:900px;">
+            <div style="flex:1; border-left:1px solid rgba(255,255,255,0.08); padding:0 0 3px 4px;">00:00</div>
+            <div style="flex:1; border-left:1px solid rgba(255,255,255,0.08); padding:0 0 3px 4px;">00:05</div>
+            <div style="flex:1; border-left:1px solid rgba(255,255,255,0.08); padding:0 0 3px 4px;">00:10</div>
+            <div style="flex:1; border-left:1px solid rgba(255,255,255,0.08); padding:0 0 3px 4px;">00:15</div>
+            <div style="flex:1; border-left:1px solid rgba(255,255,255,0.08); padding:0 0 3px 4px;">00:20</div>
+            <div style="flex:1; border-left:1px solid rgba(255,255,255,0.08); padding:0 0 3px 4px;">00:25</div>
+            <div style="flex:1; border-left:1px solid rgba(255,255,255,0.08); padding:0 0 3px 4px;">00:30</div>
+          </div>
+
+          <!-- lanes -->
+          <div style="position:relative; min-width:900px;">
+            <!-- text lane -->
+            <div style="height:36px; position:relative; border-bottom:1px solid rgba(255,255,255,0.04);">
+              <div onClick="{{ selTitleClick }}" style="position:absolute; left:2%; top:5px; height:26px; width:20%; border-radius:6px; background:linear-gradient(90deg,rgba(164,92,255,0.85),rgba(164,92,255,0.6)); display:flex; align-items:center; padding:0 9px; cursor:pointer; overflow:hidden; outline:{{ selTitleOutline }};"><span style="font-size:11px; font-weight:600; color:#fff; white-space:nowrap;">Vlog Été 2026</span></div>
+              <div onClick="{{ selSubClick }}" style="position:absolute; left:26%; top:5px; height:26px; width:26%; border-radius:6px; background:linear-gradient(90deg,rgba(164,92,255,0.7),rgba(164,92,255,0.5)); display:flex; align-items:center; padding:0 9px; cursor:pointer; overflow:hidden; outline:{{ selSubOutline }};"><span style="font-size:11px; font-weight:600; color:#fff; white-space:nowrap;">Épisode 4 — Sous-titre</span></div>
+            </div>
+            <!-- video lane -->
+            <div style="height:36px; position:relative; border-bottom:1px solid rgba(255,255,255,0.04);">
+              <div style="position:absolute; left:0; top:5px; height:26px; width:44%; border-radius:6px; background:repeating-linear-gradient(90deg,rgba(92,134,255,0.85) 0 3px,rgba(92,134,255,0.65) 3px 6px); display:flex; align-items:center; padding:0 9px; overflow:hidden;"><span style="font-size:11px; font-weight:600; color:#fff;">plage_coucher.mp4</span></div>
+              <div style="position:absolute; left:44.5%; top:5px; height:26px; width:34%; border-radius:6px; background:repeating-linear-gradient(90deg,rgba(92,134,255,0.85) 0 3px,rgba(92,134,255,0.65) 3px 6px); display:flex; align-items:center; padding:0 9px; overflow:hidden;"><span style="font-size:11px; font-weight:600; color:#fff;">ville_nuit.mp4</span></div>
+            </div>
+            <!-- image lane -->
+            <div style="height:36px; position:relative; border-bottom:1px solid rgba(255,255,255,0.04);">
+              <div onClick="{{ selLogoClick }}" style="position:absolute; left:1%; top:5px; height:26px; width:15%; border-radius:6px; background:linear-gradient(90deg,rgba(47,196,182,0.85),rgba(47,196,182,0.6)); display:flex; align-items:center; padding:0 9px; cursor:pointer; overflow:hidden; outline:{{ selLogoOutline }};"><span style="font-size:11px; font-weight:600; color:#06231f;">logo.png</span></div>
+            </div>
+            <!-- audio lane -->
+            <div style="height:36px; position:relative;">
+              <div onClick="{{ addAudio }}" style="position:absolute; left:0; top:5px; height:26px; width:78%; border-radius:6px; background:linear-gradient(90deg,rgba(56,209,122,0.35),rgba(56,209,122,0.2)); border:1px solid rgba(56,209,122,0.5); display:flex; align-items:center; padding:0 9px; overflow:hidden;">
+                <svg width="100%" height="16" viewBox="0 0 300 16" preserveAspectRatio="none" style="opacity:0.7;"><path d="M0 8 L6 5 L12 10 L18 3 L24 11 L30 6 L36 9 L42 4 L48 12 L54 7 L60 5 L66 10 L72 4 L78 11 L84 6 L90 9 L96 5 L102 10 L108 3 L114 12 L120 7 L126 9 L132 5 L138 11 L144 6 L150 8 L156 4 L162 10 L168 6 L174 9 L180 5 L186 11 L192 7 L198 4 L204 10 L210 6 L216 9 L222 5 L228 11 L234 7 L240 8 L246 4 L252 10 L258 6 L264 9 L270 5 L276 11 L282 7 L288 9 L294 6 L300 8" stroke="#0a3d24" stroke-width="1.5" fill="none"/></svg>
+              </div>
+            </div>
+
+            <!-- playhead -->
+            <div style="position:absolute; left:38%; top:-24px; bottom:0; width:2px; background:#ff5f57; pointer-events:none;"><div style="position:absolute; top:-24px; left:50%; transform:translateX(-50%); width:12px; height:12px; background:#ff5f57; border-radius:3px;"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ MODAL ============ -->
+  <sc-if value="{{ showModal }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; inset:0; z-index:50; background:rgba(6,6,10,0.7); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; animation:lev-fade .18s ease;">
+    <div style="width:520px; max-width:92vw; border-radius:18px; background:#16161d; border:1px solid rgba(255,255,255,0.1); box-shadow:0 30px 90px rgba(0,0,0,0.6); overflow:hidden; animation:lev-pop .22s cubic-bezier(.2,.8,.3,1);">
+      <div style="padding:22px 24px 18px; border-bottom:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; justify-content:space-between;">
+        <div><div style="font-size:18px; font-weight:800; letter-spacing:-0.01em;">Nouvelle vidéo</div><div style="font-size:12.5px; color:#9a9aa8; margin-top:2px;">Choisissez le format et la cadence.</div></div>
+        <div onClick="{{ closeModal }}" style="width:32px; height:32px; border-radius:9px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; cursor:pointer; color:#9a9aa8;" style-hover="background:rgba(255,255,255,0.1); color:#fff;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></div>
+      </div>
+
+      <div style="padding:22px 24px; display:flex; flex-direction:column; gap:22px;">
+        <div>
+          <div style="font-size:12px; font-weight:700; color:#c9c9d4; margin-bottom:9px;">Nom du projet</div>
+          <div style="padding:12px 14px; border-radius:11px; background:#0f0f15; border:1px solid rgba(255,255,255,0.1); font-size:14px;">{{ projectName }}</div>
+        </div>
+
+        <div>
+          <div style="font-size:12px; font-weight:700; color:#c9c9d4; margin-bottom:9px;">Résolution</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:9px;">
+            <div onClick="{{ res169Click }}" style="cursor:pointer; padding:13px 8px; border-radius:11px; background:{{ res169Bg }}; border:1px solid {{ res169Bd }}; display:flex; flex-direction:column; align-items:center; gap:8px;">
+              <div style="width:34px; height:19px; border-radius:3px; border:1.5px solid {{ res169Ic }};"></div>
+              <div style="text-align:center;"><div style="font-size:12px; font-weight:700;">16:9</div><div style="font-size:9.5px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">1920×1080</div></div>
+            </div>
+            <div onClick="{{ res916Click }}" style="cursor:pointer; padding:13px 8px; border-radius:11px; background:{{ res916Bg }}; border:1px solid {{ res916Bd }}; display:flex; flex-direction:column; align-items:center; gap:8px;">
+              <div style="width:17px; height:30px; border-radius:3px; border:1.5px solid {{ res916Ic }};"></div>
+              <div style="text-align:center;"><div style="font-size:12px; font-weight:700;">9:16</div><div style="font-size:9.5px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">1080×1920</div></div>
+            </div>
+            <div onClick="{{ res11Click }}" style="cursor:pointer; padding:13px 8px; border-radius:11px; background:{{ res11Bg }}; border:1px solid {{ res11Bd }}; display:flex; flex-direction:column; align-items:center; gap:8px;">
+              <div style="width:26px; height:26px; border-radius:3px; border:1.5px solid {{ res11Ic }};"></div>
+              <div style="text-align:center;"><div style="font-size:12px; font-weight:700;">1:1</div><div style="font-size:9.5px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">1080×1080</div></div>
+            </div>
+            <div onClick="{{ res4kClick }}" style="cursor:pointer; padding:13px 8px; border-radius:11px; background:{{ res4kBg }}; border:1px solid {{ res4kBd }}; display:flex; flex-direction:column; align-items:center; gap:8px;">
+              <div style="width:34px; height:19px; border-radius:3px; border:1.5px solid {{ res4kIc }}; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:800; color:{{ res4kIc }};">4K</div>
+              <div style="text-align:center;"><div style="font-size:12px; font-weight:700;">UHD</div><div style="font-size:9.5px; color:#6b6b78; font-family:'JetBrains Mono',monospace;">3840×2160</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:12px; font-weight:700; color:#c9c9d4; margin-bottom:9px;">Images par seconde</div>
+          <div style="display:flex; gap:9px;">
+            <div onClick="{{ fps24Click }}" style="flex:1; cursor:pointer; padding:11px; border-radius:11px; text-align:center; background:{{ fps24Bg }}; border:1px solid {{ fps24Bd }};"><div style="font-size:15px; font-weight:800; font-family:'JetBrains Mono',monospace;">24</div><div style="font-size:10px; color:#6b6b78;">Cinéma</div></div>
+            <div onClick="{{ fps30Click }}" style="flex:1; cursor:pointer; padding:11px; border-radius:11px; text-align:center; background:{{ fps30Bg }}; border:1px solid {{ fps30Bd }};"><div style="font-size:15px; font-weight:800; font-family:'JetBrains Mono',monospace;">30</div><div style="font-size:10px; color:#6b6b78;">Standard</div></div>
+            <div onClick="{{ fps60Click }}" style="flex:1; cursor:pointer; padding:11px; border-radius:11px; text-align:center; background:{{ fps60Bg }}; border:1px solid {{ fps60Bd }};"><div style="font-size:15px; font-weight:800; font-family:'JetBrains Mono',monospace;">60</div><div style="font-size:10px; color:#6b6b78;">Fluide</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:16px 24px 22px; display:flex; gap:11px; justify-content:flex-end; border-top:1px solid rgba(255,255,255,0.07);">
+        <button onClick="{{ closeModal }}" style="padding:12px 20px; border-radius:11px; border:1px solid rgba(255,255,255,0.12); background:transparent; color:#e9e9f0; font-size:13px; font-weight:600; cursor:pointer;" style-hover="background:rgba(255,255,255,0.06);">Annuler</button>
+        <button onClick="{{ createProject }}" style="display:flex; align-items:center; gap:8px; padding:12px 22px; border-radius:11px; border:none; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 8px 22px rgba(92,134,255,0.34);" style-hover="filter:brightness(1.08);">Créer le projet →</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#5c86ff&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Thème&quot;,&quot;options&quot;:[&quot;#5c86ff&quot;,&quot;#2fc4b6&quot;,&quot;#38d17a&quot;,&quot;#ff8a5c&quot;]},&quot;accent2&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#a45cff&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Thème&quot;,&quot;options&quot;:[&quot;#a45cff&quot;,&quot;#5c86ff&quot;,&quot;#ff6b8a&quot;,&quot;#2fc4b6&quot;]},&quot;showSafeMargins&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Canvas&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'home',
+    showModal: false,
+    projectName: 'Vlog Été 2026',
+    resKey: '16:9',
+    fps: 30,
+    leftTab: 'text',
+    selectedId: 'title',
+    playing: false,
+  };
+
+  componentDidMount(){ this.applyAccent(); }
+  componentDidUpdate(){ this.applyAccent(); }
+  applyAccent(){
+    const a = this.props.accent || '#5c86ff';
+    const a2 = this.props.accent2 || '#a45cff';
+    document.documentElement.style.setProperty('--accent', a);
+    document.documentElement.style.setProperty('--accent2', a2);
+  }
+
+  set(k,v){ this.setState({[k]:v}); }
+
+  renderVals(){
+    const s = this.state;
+    const ACC = 'var(--accent)';
+    const resMap = { '16:9':'1920 × 1080', '9:16':'1080 × 1920', '1:1':'1080 × 1080', '4k':'3840 × 2160' };
+    const tabTitles = { text:'Texte', video:'Vidéos', image:'Images', audio:'Audio', shape:'Formes' };
+
+    // tab active helpers
+    const tab = (name) => ({
+      bg: s.leftTab===name ? 'rgba(92,134,255,0.14)' : 'transparent',
+      fg: s.leftTab===name ? '#fff' : '#9a9aa8',
+    });
+    const tT=tab('text'), tV=tab('video'), tI=tab('image'), tA=tab('audio'), tS=tab('shape');
+
+    // selection outline helper
+    const outline = (id, color) => s.selectedId===id ? ('2px solid '+color) : 'none';
+
+    // res option helper
+    const resOpt = (key) => ({
+      bg: s.resKey===key ? 'rgba(92,134,255,0.14)' : '#0f0f15',
+      bd: s.resKey===key ? ACC : 'rgba(255,255,255,0.09)',
+      ic: s.resKey===key ? ACC : '#6b6b78',
+    });
+    const r169=resOpt('16:9'), r916=resOpt('9:16'), r11=resOpt('1:1'), r4k=resOpt('4k');
+
+    const fpsOpt = (v) => ({
+      bg: s.fps===v ? 'rgba(92,134,255,0.14)' : '#0f0f15',
+      bd: s.fps===v ? ACC : 'rgba(255,255,255,0.09)',
+    });
+    const f24=fpsOpt(24), f30=fpsOpt(30), f60=fpsOpt(60);
+
+    return {
+      isHome: s.screen==='home',
+      isEditor: s.screen==='editor',
+      showModal: s.showModal,
+      projectName: s.projectName,
+      fps: s.fps,
+      resLabel: resMap[s.resKey] || '1920 × 1080',
+      tabTitle: tabTitles[s.leftTab] || 'Texte',
+
+      // nav
+      openModal: () => this.set('showModal', true),
+      closeModal: () => this.set('showModal', false),
+      createProject: () => this.setState({ showModal:false, screen:'editor' }),
+      goHome: () => this.set('screen','home'),
+
+      // tabs
+      tabText: s.leftTab==='text', tabVideo: s.leftTab==='video', tabImage: s.leftTab==='image', tabAudio: s.leftTab==='audio', tabShape: s.leftTab==='shape',
+      tabTextClick: ()=>this.set('leftTab','text'),
+      tabVideoClick: ()=>this.set('leftTab','video'),
+      tabImageClick: ()=>this.set('leftTab','image'),
+      tabAudioClick: ()=>this.set('leftTab','audio'),
+      tabShapeClick: ()=>this.set('leftTab','shape'),
+      tabTextBg: tT.bg, tabTextFg: tT.fg,
+      tabVideoBg: tV.bg, tabVideoFg: tV.fg,
+      tabImageBg: tI.bg, tabImageFg: tI.fg,
+      tabAudioBg: tA.bg, tabAudioFg: tA.fg,
+      tabShapeBg: tS.bg, tabShapeFg: tS.fg,
+
+      // add / select
+      addTitle: ()=>this.setState({ selectedId:'title' }),
+      addVideo: ()=>this.setState({ selectedId:null }),
+      addImage: ()=>this.setState({ selectedId:'logo' }),
+      addAudio: ()=>this.setState({ selectedId:null }),
+      addShape: ()=>this.setState({ selectedId:null }),
+      selTitleClick: ()=>this.set('selectedId','title'),
+      selSubClick: ()=>this.set('selectedId','subtitle'),
+      selLogoClick: ()=>this.set('selectedId','logo'),
+
+      // selection state
+      selTitle: s.selectedId==='title',
+      selSub: s.selectedId==='subtitle',
+      selLogo: s.selectedId==='logo',
+      selTitleOutline: outline('title','var(--accent2)'),
+      selSubOutline: outline('subtitle','var(--accent2)'),
+      selLogoOutline: outline('logo','#2fc4b6'),
+      showTextProps: s.selectedId==='title' || s.selectedId==='subtitle',
+      showImageProps: s.selectedId==='logo',
+      noSelection: !s.selectedId,
+
+      // playback
+      playing: s.playing,
+      notPlaying: !s.playing,
+      togglePlay: ()=>this.set('playing', !s.playing),
+
+      // modal options
+      res169Click: ()=>this.set('resKey','16:9'),
+      res916Click: ()=>this.set('resKey','9:16'),
+      res11Click: ()=>this.set('resKey','1:1'),
+      res4kClick: ()=>this.set('resKey','4k'),
+      res169Bg:r169.bg, res169Bd:r169.bd, res169Ic:r169.ic,
+      res916Bg:r916.bg, res916Bd:r916.bd, res916Ic:r916.ic,
+      res11Bg:r11.bg, res11Bd:r11.bd, res11Ic:r11.ic,
+      res4kBg:r4k.bg, res4kBd:r4k.bd, res4kIc:r4k.ic,
+      fps24Click: ()=>this.set('fps',24),
+      fps30Click: ()=>this.set('fps',30),
+      fps60Click: ()=>this.set('fps',60),
+      fps24Bg:f24.bg, fps24Bd:f24.bd,
+      fps30Bg:f30.bg, fps30Bd:f30.bd,
+      fps60Bg:f60.bg, fps60Bd:f60.bd,
+
+      // tweaks
+      showSafe: this.props.showSafeMargins ?? false,
+    };
+  }
+}
+</script>
+</body>
+</html>

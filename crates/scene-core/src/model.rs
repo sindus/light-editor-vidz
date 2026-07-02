@@ -1,0 +1,327 @@
+//! Modèle de données unique de light-editor-vidz : Project -> Composition -> Element.
+//!
+//! Un seul système de coordonnées (x/y = coin haut-gauche, width/height, rotation),
+//! partagé par la preview (wasm) et l'export (natif). Pas de conversion ancre/coin
+//! comme dans l'ancien projet. `x`/`y`/`width`/`height` sont exprimés en **pourcentage
+//! du canvas** (0-100), pas en pixels absolus : la position reste correcte quelle que
+//! soit la résolution du projet ou le niveau de zoom de l'aperçu.
+
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Project {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub fps: u32,
+    pub duration: f64,
+    pub compositions: Vec<Composition>,
+    pub audio_tracks: Vec<AudioTrack>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Composition {
+    pub id: String,
+    pub name: String,
+    /// Recalculé automatiquement à partir des durées + overlap_next, jamais édité directement.
+    pub start_time: f64,
+    pub duration: f64,
+    pub elements: Vec<Element>,
+    pub transition_in: Option<Transition>,
+    pub transition_out: Option<Transition>,
+    /// Chevauchement temporel (secondes) avec la composition suivante, pour les fondus-enchaînés.
+    pub overlap_next: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ElementBase {
+    pub id: String,
+    pub name: String,
+    /// Temps relatif au début de la composition.
+    pub start_time: f64,
+    /// None = dure jusqu'à la fin de la composition.
+    pub duration: Option<f64>,
+    /// Pourcentage de la largeur du canvas (0-100).
+    pub x: f64,
+    /// Pourcentage de la hauteur du canvas (0-100).
+    pub y: f64,
+    /// Pourcentage de la largeur du canvas (0-100).
+    pub width: f64,
+    /// Pourcentage de la hauteur du canvas (0-100).
+    pub height: f64,
+    pub rotation: f64,
+    pub animations: Vec<Animation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum Element {
+    Text(TextElement),
+    Image(ImageElement),
+    Video(VideoElement),
+    Shape(ShapeElement),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TextElement {
+    #[serde(flatten)]
+    pub base: ElementBase,
+    pub content: String,
+    pub alignment: TextAlign,
+    pub vertical_alignment: VerticalAlign,
+    pub color: String,
+    pub background_color: Option<String>,
+    /// Exprimé en `cqw` (% de la largeur du canvas) pour rester proportionnel quelle
+    /// que soit la résolution du projet. None = taille automatique (auto-fit, Phase 5+).
+    pub font_size: Option<f64>,
+    pub font_family: Option<String>,
+    pub font_weight: Option<FontWeight>,
+    pub font_style: Option<FontStyle>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ImageElement {
+    #[serde(flatten)]
+    pub base: ElementBase,
+    pub src: String,
+    pub fit_mode: FitMode,
+    pub background_color: Option<String>,
+    pub image_pan: Option<ImagePan>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct VideoElement {
+    #[serde(flatten)]
+    pub base: ElementBase,
+    pub src: String,
+    pub fit_mode: FitMode,
+    pub background_color: Option<String>,
+    pub image_pan: Option<ImagePan>,
+    /// Point d'entrée (secondes) dans le fichier source.
+    pub video_offset: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ShapeElement {
+    #[serde(flatten)]
+    pub base: ElementBase,
+    pub shape_type: ShapeType,
+    pub fill: String,
+    pub stroke: String,
+    pub stroke_width: f64,
+    pub border_radius: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AudioTrack {
+    pub id: String,
+    pub name: String,
+    pub src: String,
+    pub start_time: f64,
+    pub duration: Option<f64>,
+    pub volume: f64,
+    pub audio_offset: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Animation {
+    pub animation_type: AnimationType,
+    pub direction: AnimationDirection,
+    pub duration: f64,
+    pub easing: Easing,
+    pub with_fade: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Transition {
+    pub transition_type: TransitionType,
+    pub duration: f64,
+    pub easing: Easing,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ImagePan {
+    pub pan_type: ImagePanType,
+    /// 0.0 à 1.0
+    pub intensity: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub enum ImagePanType {
+    ZoomIn,
+    ZoomOut,
+    PanLeft,
+    PanRight,
+    PanUp,
+    PanDown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "kebab-case")]
+pub enum FitMode {
+    FitHeight,
+    FitWidth,
+    FitLargest,
+    Cover,
+    Stretch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub enum ShapeType {
+    Rectangle,
+    Ellipse,
+    Triangle,
+    Line,
+    Arrow,
+    Star,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "lowercase")]
+pub enum TextAlign {
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "lowercase")]
+pub enum VerticalAlign {
+    Top,
+    Middle,
+    Bottom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "lowercase")]
+pub enum FontWeight {
+    Normal,
+    Bold,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "lowercase")]
+pub enum FontStyle {
+    Normal,
+    Italic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub enum AnimationDirection {
+    In,
+    Out,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "kebab-case")]
+pub enum AnimationType {
+    Fade,
+    SlideLeft,
+    SlideRight,
+    SlideUp,
+    SlideDown,
+    ZoomIn,
+    ZoomOut,
+    Rotate,
+    Flip,
+    Blur,
+    FadeUp,
+    FadeDown,
+    FadeLeft,
+    FadeRight,
+    SkewLeft,
+    SkewRight,
+    Roll,
+    Spin,
+    Bounce,
+    Drop,
+    /// Réservé au texte.
+    Typewriter,
+    /// Réservé au texte.
+    WordReveal,
+    /// Réservé au texte.
+    LineReveal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "kebab-case")]
+pub enum TransitionType {
+    SlideLeft,
+    SlideRight,
+    SlideUp,
+    SlideDown,
+    Zoom,
+    FlipH,
+    FlipV,
+    RotateCw,
+    RotateCcw,
+    Blur,
+    WipeLeft,
+    WipeRight,
+    WipeUp,
+    WipeDown,
+    Fade,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "kebab-case")]
+pub enum Easing {
+    Linear,
+    Power1In,
+    Power1Out,
+    Power1InOut,
+    Power2In,
+    Power2Out,
+    Power2InOut,
+    Power3In,
+    Power3Out,
+    Power3InOut,
+    Bounce,
+}
+
+impl Element {
+    pub fn base(&self) -> &ElementBase {
+        match self {
+            Element::Text(e) => &e.base,
+            Element::Image(e) => &e.base,
+            Element::Video(e) => &e.base,
+            Element::Shape(e) => &e.base,
+        }
+    }
+
+    pub fn base_mut(&mut self) -> &mut ElementBase {
+        match self {
+            Element::Text(e) => &mut e.base,
+            Element::Image(e) => &mut e.base,
+            Element::Video(e) => &mut e.base,
+            Element::Shape(e) => &mut e.base,
+        }
+    }
+}

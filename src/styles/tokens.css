@@ -1,0 +1,64 @@
+/* Design tokens — issus de design_handoff_lighteditorvidz/README.md */
+:root {
+  /* Fonds */
+  --bg-deepest: #0b0b0f;
+  --bg-app: #0f0f15;
+  --bg-bar: #131319;
+  --bg-panel: #16161d;
+  --bg-card: #1a1a22;
+  --bg-card-raised: #20202a;
+
+  /* Texte */
+  --text-primary: #e9e9f0;
+  --text-strong-secondary: #c9c9d4;
+  --text-muted: #9a9aa8;
+  --text-faint: #6b6b78;
+  --text-placeholder: #5a5a68;
+
+  /* Bordures */
+  --border-thin: rgba(255, 255, 255, 0.07);
+  --border-thin-alt: rgba(255, 255, 255, 0.06);
+  --border-field: rgba(255, 255, 255, 0.1);
+  --border-field-soft: rgba(255, 255, 255, 0.09);
+  --border-field-strong: rgba(255, 255, 255, 0.12);
+
+  /* Accents */
+  --accent: #5c86ff;
+  --accent2: #a45cff;
+  --accent-gradient: linear-gradient(135deg, var(--accent), var(--accent2));
+  --color-video: #5c86ff;
+  --color-text: #a45cff;
+  --color-image: #2fc4b6;
+  --color-audio: #38d17a;
+  --color-shape: #ff8a5c;
+  --color-danger: #ff5f57;
+
+  /* Rayons */
+  --radius-field: 11px;
+  --radius-panel: 11px;
+  --radius-modal: 18px;
+  --radius-pill: 9px;
+  --radius-clip: 6px;
+  --radius-logo: 15px;
+
+  /* Ombres */
+  --shadow-primary-btn: 0 10px 30px rgba(92, 134, 255, 0.36);
+  --shadow-primary-btn-sm: 0 5px 16px rgba(92, 134, 255, 0.32);
+  --shadow-modal: 0 30px 90px rgba(0, 0, 0, 0.6);
+  --shadow-canvas: 0 24px 70px rgba(0, 0, 0, 0.6);
+
+  /* Layout fixe */
+  --w-rail: 74px;
+  --w-library: 264px;
+  --w-properties: 300px;
+  --w-timeline-labels: 104px;
+  --h-topbar: 50px;
+  --h-toolbar: 42px;
+  --h-playback-bar: 46px;
+  --h-timeline: 230px;
+  --h-track-row: 36px;
+
+  /* Polices */
+  --font-ui: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
