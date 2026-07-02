@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LightEditorVidz — desktop video editor</title>
+    <meta
+      name="description"
+      content="A desktop video editor built with Tauri + React. Real mp4 export, animations, multi-scene timeline. Free and open source."
+    />
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --bg-deepest: #0b0b0f;
+        --bg-app: #0f0f15;
+        --bg-panel: #16161d;
+        --bg-card: #1a1a22;
+        --text-primary: #e9e9f0;
+        --text-muted: #9a9aa8;
+        --text-faint: #6b6b78;
+        --border-thin: rgba(255, 255, 255, 0.07);
+        --border-field: rgba(255, 255, 255, 0.1);
+        --accent: #5c86ff;
+        --accent2: #a45cff;
+        --accent-gradient: linear-gradient(135deg, var(--accent), var(--accent2));
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(circle at 50% 0%, #16161f 0%, var(--bg-app) 60%);
+        color: var(--text-primary);
+        font-family:
+          "Manrope",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.55;
+      }
+
+      code,
+      pre {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+      }
+
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 80px 24px 100px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 28px;
+      }
+
+      .logo {
+        width: 52px;
+        height: 52px;
+        border-radius: 15px;
+        background: var(--accent-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 30px rgba(92, 134, 255, 0.36);
+        flex-shrink: 0;
+      }
+
+      .logo svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      h1 {
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin: 0;
+      }
+
+      .accent {
+        color: var(--accent);
+      }
+
+      .kicker {
+        font-size: 11px;
+        color: var(--text-faint);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin-top: 2px;
+      }
+
+      .tagline {
+        font-size: 17px;
+        color: var(--text-muted);
+        max-width: 560px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        margin: 32px 0 48px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 13px 22px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 14px;
+        text-decoration: none;
+        border: 1px solid var(--border-field);
+      }
+
+      .btn-primary {
+        background: var(--accent-gradient);
+        color: #fff;
+        border: none;
+        box-shadow: 0 10px 30px rgba(92, 134, 255, 0.36);
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-primary);
+      }
+
+      section {
+        margin-top: 56px;
+      }
+
+      h2 {
+        font-size: 18px;
+        font-weight: 800;
+        margin: 0 0 16px;
+      }
+
+      .install-block {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-thin);
+        border-radius: 14px;
+        padding: 18px 20px;
+        margin-bottom: 14px;
+      }
+
+      .install-block h3 {
+        margin: 0 0 10px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      pre {
+        background: var(--bg-deepest);
+        border: 1px solid var(--border-field);
+        border-radius: 10px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-size: 13px;
+        margin: 0;
+      }
+
+      ul {
+        color: var(--text-muted);
+        padding-left: 20px;
+      }
+
+      li {
+        margin-bottom: 8px;
+      }
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+      }
+
+      .feature-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-thin);
+        border-radius: 12px;
+        padding: 16px;
+        font-size: 13.5px;
+        color: var(--text-muted);
+      }
+
+      .feature-card strong {
+        display: block;
+        color: var(--text-primary);
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+
+      footer {
+        margin-top: 80px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border-thin);
+        color: var(--text-faint);
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      footer a {
+        color: var(--text-muted);
+      }
+
+      @media (max-width: 600px) {
+        .features {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <div class="logo">
+          <svg viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+        </div>
+        <div>
+          <h1>LightEditor<span class="accent">Vidz</span></h1>
+          <div class="kicker">Desktop video editor</div>
+        </div>
+      </div>
+
+      <p class="tagline">
+        Create scenes on a canvas with text, images, videos, audio and shapes, animate them, and
+        export a real <code>.mp4</code> — all locally. Free, open source, no cloud, no watermark.
+      </p>
+
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/sindus/light-editor-vidz/releases/latest">Download latest release</a>
+        <a class="btn btn-secondary" href="https://github.com/sindus/light-editor-vidz">View on GitHub</a>
+      </div>
+
+      <section>
+        <h2>Install</h2>
+
+        <div class="install-block">
+          <h3>One-line install (macOS &amp; Linux)</h3>
+          <pre><code>curl -fsSL https://sindus.github.io/light-editor-vidz/install.sh | sh</code></pre>
+        </div>
+
+        <ul>
+          <li><strong>macOS</strong> — installs via a personal Homebrew tap and pulls in <code>ffmpeg</code> as a dependency.</li>
+          <li><strong>Linux</strong> — downloads the latest AppImage into <code>~/.local/bin</code> and installs <code>ffmpeg</code> via your package manager if missing.</li>
+        </ul>
+
+        <div class="install-block">
+          <h3>Manual install</h3>
+          <p style="margin: 0; color: var(--text-muted); font-size: 13.5px">
+            macOS: <code>brew install sindus/light-editor-vidz/light-editor-vidz</code><br />
+            Linux/macOS: grab the <code>.deb</code>, <code>.AppImage</code> or <code>.dmg</code> from the
+            <a href="https://github.com/sindus/light-editor-vidz/releases" style="color: var(--accent)">releases page</a>.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Uninstall</h2>
+        <div class="install-block">
+          <pre><code>curl -fsSL https://sindus.github.io/light-editor-vidz/uninstall.sh | sh</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Features</h2>
+        <div class="features">
+          <div class="feature-card"><strong>Multi-scene timeline</strong>A real playback clock, not a fixed-interval hack.</div>
+          <div class="feature-card"><strong>Text · Image · Video · Audio · Shapes</strong>Drag, resize and rotate with one shared interaction model.</div>
+          <div class="feature-card"><strong>Composable animations</strong>Fade, slide, zoom, rotate, blur, bounce — layered, not overwritten.</div>
+          <div class="feature-card"><strong>Real mp4 export</strong>Native rasterization + ffmpeg, with audio mixing. Not a DOM replay.</div>
+          <div class="feature-card"><strong>Undo/redo</strong>Plus duplicate, split, delete, and legacy JSON project import.</div>
+          <div class="feature-card"><strong>Signed auto-update</strong>Checks GitHub Releases, downloads, installs, relaunches.</div>
+        </div>
+      </section>
+
+      <footer>
+        <span>LightEditorVidz — MIT licensed</span>
+        <a href="https://github.com/sindus/light-editor-vidz">github.com/sindus/light-editor-vidz</a>
+      </footer>
+    </main>
+  </body>
+</html>

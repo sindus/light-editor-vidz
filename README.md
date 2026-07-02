@@ -65,7 +65,7 @@ Useful scripts:
 crates/scene-core/   Rust: data model, animation/timeline resolution, frame rasterizer (export)
 src-tauri/            Tauri app: commands (project I/O, assets, export), ffmpeg orchestration
 src/                  React frontend: editor UI, i18n, pure logic in src/lib/*.ts
-scripts/              install.sh / uninstall.sh (see install instructions above)
+docs/                 GitHub Pages landing site + install.sh / uninstall.sh
 ```
 
 A project is a `.lvproj/` folder (`project.json` + an `assets/` subfolder for imported media) —
