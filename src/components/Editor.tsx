@@ -90,7 +90,12 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
 
   useEffect(() => {
     loadProject(projectDir)
-      .then(setProject)
+      // Un projet sans aucune composition (fichier legacy/corrompu — le flux normal de
+      // l'app ne peut jamais y mener : `new_project` en crée toujours une et l'UI refuse
+      // de supprimer la dernière) laisserait `resolveActiveComposition` renvoyer `null`
+      // indéfiniment, bloquant l'éditeur sur "Chargement…" sans jamais rien afficher.
+      // On répare silencieusement en ajoutant une scène vide plutôt que de bloquer.
+      .then((p) => setProject(p.compositions.length > 0 ? p : addComposition(p)))
       .catch((e) => setError(String(e)));
   }, [projectDir]);
 
