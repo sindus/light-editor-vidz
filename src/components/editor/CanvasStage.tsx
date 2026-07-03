@@ -11,7 +11,9 @@ import { isElementActive } from "../../lib/timeline";
 import {
   resolveCompositionTransition,
   resolveCompositionWipeClip,
+  applyTextReveal,
   resolveElementAnimations,
+  resolveTextReveal,
   resolveImagePan,
   transformToCss,
 } from "../../lib/animate";
@@ -80,7 +82,7 @@ function activeDurationOf(el: Element, composition: Composition): number {
   return el.duration ?? composition.duration - el.start_time;
 }
 
-function TextElementView({ element }: { element: Extract<Element, { type: "text" }> }) {
+function TextElementView({ element, content }: { element: Extract<Element, { type: "text" }>; content: string }) {
   return (
     <div
       style={{
@@ -119,7 +121,7 @@ function TextElementView({ element }: { element: Extract<Element, { type: "text"
         wordBreak: "break-word",
       }}
     >
-      {element.content}
+      {content}
     </div>
   );
 }
@@ -438,7 +440,15 @@ export default function CanvasStage({
                         mixBlendMode: el.blend_mode ?? undefined,
                       }}
                     >
-                      {el.type === "text" && <TextElementView element={el} />}
+                      {el.type === "text" && (
+                        <TextElementView
+                          element={el}
+                          content={applyTextReveal(
+                            el.content,
+                            resolveTextReveal(el.animations, localElementTime, activeDuration),
+                          )}
+                        />
+                      )}
                       {el.type === "image" && (
                         <ImageElementView element={el} projectDir={projectDir} panTransform={panTransform} />
                       )}

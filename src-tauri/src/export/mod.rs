@@ -1,7 +1,7 @@
 mod ffmpeg;
 
-use ffmpeg::{mux_audio, AudioMixInput, VideoEncoder};
-use scene_core::model::Project;
+use ffmpeg::{has_audio_stream, mux_audio, AudioMixInput, VideoEncoder};
+use scene_core::model::{Element, Project};
 use scene_core::raster::FrameRenderer;
 use std::path::Path;
 
@@ -14,6 +14,39 @@ pub struct ExportOverrides {
     pub height: Option<u32>,
     pub fps: Option<u32>,
     pub crf: Option<u32>,
+}
+
+/// Entrées de mixage pour les pistes audio des compositions (hors audio embarqué des éléments
+/// vidéo, géré séparément dans `export_video`). Fonction pure, testable sans I/O : chaque piste
+/// a un `start_time` relatif à sa composition, converti ici en position absolue sur la timeline
+/// globale (`composition.start_time + track.start_time`).
+fn collect_composition_audio_inputs(project: &Project, project_dir: &Path) -> Vec<AudioMixInput> {
+    let any_solo = project
+        .compositions
+        .iter()
+        .flat_map(|c| &c.audio_tracks)
+        .any(|track| track.solo);
+    project
+        .compositions
+        .iter()
+        .flat_map(|composition| {
+            composition
+                .audio_tracks
+                .iter()
+                .filter(move |track| !track.muted && (!any_solo || track.solo))
+                .map(move |track| AudioMixInput {
+                    path: project_dir.join(&track.src),
+                    offset: track.audio_offset,
+                    start_time: composition.start_time + track.start_time,
+                    volume: track.volume,
+                    fade_in: track.fade_in.max(0.0),
+                    fade_out: track.fade_out.max(0.0),
+                    duration: track
+                        .duration
+                        .unwrap_or(composition.duration - track.start_time),
+                })
+        })
+        .collect()
 }
 
 /// Rend chaque frame du projet et encode le mp4 final (vidéo + audio mixé).
@@ -56,22 +89,38 @@ pub fn export_video(
     }
     encoder.finish()?;
 
-    let audio_inputs: Vec<AudioMixInput> = project
-        .audio_tracks
-        .iter()
-        .filter(|track| !track.muted)
-        .map(|track| AudioMixInput {
-            path: project_dir.join(&track.src),
-            offset: track.audio_offset,
-            start_time: track.start_time,
-            volume: track.volume,
-            fade_in: track.fade_in.max(0.0),
-            fade_out: track.fade_out.max(0.0),
-            duration: track
+    let mut audio_inputs = collect_composition_audio_inputs(project, project_dir);
+
+    // Audio embarqué des éléments vidéo : ffmpeg peut sélectionner la piste audio d'une
+    // source vidéo directement (`[idx:a]`), donc pas besoin d'extraction séparée — seulement
+    // vérifier qu'une piste audio existe avant de l'ajouter au mix (une vidéo peut être muette).
+    for composition in &project.compositions {
+        for el in &composition.elements {
+            let Element::Video(video_el) = el else {
+                continue;
+            };
+            if video_el.volume <= 0.001 {
+                continue;
+            }
+            let source_path = project_dir.join(&video_el.src);
+            if !has_audio_stream(&source_path) {
+                continue;
+            }
+            let base = el.base();
+            let active_duration = base
                 .duration
-                .unwrap_or(project.duration - track.start_time),
-        })
-        .collect();
+                .unwrap_or(composition.duration - base.start_time);
+            audio_inputs.push(AudioMixInput {
+                path: source_path,
+                offset: video_el.video_offset,
+                start_time: composition.start_time + base.start_time,
+                volume: video_el.volume,
+                fade_in: 0.0,
+                fade_out: 0.0,
+                duration: active_duration,
+            });
+        }
+    }
 
     let result = mux_audio(&temp_video, &audio_inputs, output_path);
     let _ = std::fs::remove_file(&temp_video);
@@ -83,6 +132,87 @@ pub fn export_video(
 mod tests {
     use super::*;
     use scene_core::model::*;
+
+    fn empty_composition(
+        id: &str,
+        start_time: f64,
+        duration: f64,
+        audio_tracks: Vec<AudioTrack>,
+    ) -> Composition {
+        Composition {
+            id: id.into(),
+            name: id.into(),
+            start_time,
+            duration,
+            elements: vec![],
+            audio_tracks,
+            transition_in: None,
+            transition_out: None,
+            overlap_next: 0.0,
+        }
+    }
+
+    fn audio_track(id: &str, start_time: f64) -> AudioTrack {
+        AudioTrack {
+            id: id.into(),
+            name: id.into(),
+            src: format!("{id}.mp3"),
+            start_time,
+            duration: Some(1.0),
+            volume: 1.0,
+            audio_offset: 0.0,
+            fade_in: 0.0,
+            fade_out: 0.0,
+            muted: false,
+            solo: false,
+        }
+    }
+
+    #[test]
+    fn audio_track_start_time_is_relative_to_its_own_composition() {
+        // La 2e composition démarre à t=5 sur la timeline globale ; sa piste audio, avec un
+        // start_time relatif de 1s, doit finir mixée à t=6 (pas t=1).
+        let project = Project {
+            name: "p".into(),
+            width: 100,
+            height: 100,
+            fps: 30,
+            duration: 10.0,
+            compositions: vec![
+                empty_composition("c1", 0.0, 5.0, vec![]),
+                empty_composition("c2", 5.0, 5.0, vec![audio_track("a1", 1.0)]),
+            ],
+        };
+        let inputs = collect_composition_audio_inputs(&project, Path::new("/proj"));
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0].start_time, 6.0);
+    }
+
+    #[test]
+    fn muted_tracks_are_excluded_and_solo_silences_non_solo_tracks() {
+        let mut solo_track = audio_track("solo", 0.0);
+        solo_track.solo = true;
+        let mut muted_track = audio_track("muted", 0.0);
+        muted_track.muted = true;
+        let regular_track = audio_track("regular", 0.0);
+
+        let project = Project {
+            name: "p".into(),
+            width: 100,
+            height: 100,
+            fps: 30,
+            duration: 5.0,
+            compositions: vec![empty_composition(
+                "c1",
+                0.0,
+                5.0,
+                vec![solo_track, muted_track, regular_track],
+            )],
+        };
+        let inputs = collect_composition_audio_inputs(&project, Path::new("/proj"));
+        assert_eq!(inputs.len(), 1, "seule la piste solo doit être mixée");
+        assert!(inputs[0].path.ends_with("solo.mp3"));
+    }
 
     #[test]
     fn exports_a_minimal_project_to_a_valid_mp4() {
@@ -131,11 +261,11 @@ mod tests {
                     gradient_to: None,
                     gradient_angle: None,
                 })],
+                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
-            audio_tracks: vec![],
         };
 
         let output_path = dir.join("out.mp4");
@@ -216,11 +346,11 @@ mod tests {
                 start_time: 0.0,
                 duration: 0.5,
                 elements: vec![],
+                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
-            audio_tracks: vec![],
         };
 
         let output_path = dir.join("out.mp4");
@@ -263,6 +393,119 @@ mod tests {
         assert_eq!(project.width, 160);
         assert_eq!(project.height, 90);
         assert_eq!(project.fps, 10);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn export_includes_audio_from_a_video_element_with_a_soundtrack() {
+        let dir = std::env::temp_dir().join(format!(
+            "letest-videoaudio-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Génère une source vidéo synthétique avec une piste audio (ton sinusoïdal).
+        let video_src = dir.join("clip.mp4");
+        let status = std::process::Command::new("ffmpeg")
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=blue:s=64x64:d=1",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=1",
+                "-c:v",
+                "libx264",
+                "-c:a",
+                "aac",
+                "-shortest",
+            ])
+            .arg(&video_src)
+            .status()
+            .expect("ffmpeg doit être disponible pour générer le clip de test");
+        assert!(status.success(), "échec de génération du clip de test");
+
+        let project = Project {
+            name: "Video Audio Test".into(),
+            width: 64,
+            height: 64,
+            fps: 10,
+            duration: 1.0,
+            compositions: vec![Composition {
+                id: "c1".into(),
+                name: "Scene 1".into(),
+                start_time: 0.0,
+                duration: 1.0,
+                elements: vec![Element::Video(VideoElement {
+                    base: ElementBase {
+                        id: "v1".into(),
+                        name: "Clip".into(),
+                        start_time: 0.0,
+                        duration: None,
+                        x: 0.0,
+                        y: 0.0,
+                        width: 100.0,
+                        height: 100.0,
+                        rotation: 0.0,
+                        animations: vec![],
+                        group_id: None,
+                        blend_mode: None,
+                    },
+                    src: "clip.mp4".into(),
+                    fit_mode: FitMode::Cover,
+                    background_color: None,
+                    image_pan: None,
+                    video_offset: 0.0,
+                    corner_radius: None,
+                    border_color: None,
+                    border_width: None,
+                    volume: 1.0,
+                    playback_speed: 1.0,
+                })],
+                audio_tracks: vec![],
+                transition_in: None,
+                transition_out: None,
+                overlap_next: 0.0,
+            }],
+        };
+
+        let output_path = dir.join("out.mp4");
+        export_video(
+            &project,
+            &dir,
+            &output_path,
+            ExportOverrides::default(),
+            |_| {},
+        )
+        .expect("export should succeed");
+
+        let probe = std::process::Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(&output_path)
+            .output()
+            .expect("ffprobe doit être disponible");
+        let info = String::from_utf8_lossy(&probe.stdout);
+        assert!(
+            info.contains("aac"),
+            "le mp4 exporté doit contenir la piste audio du clip vidéo : {info}"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

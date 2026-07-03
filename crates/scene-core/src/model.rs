@@ -18,7 +18,6 @@ pub struct Project {
     pub fps: u32,
     pub duration: f64,
     pub compositions: Vec<Composition>,
-    pub audio_tracks: Vec<AudioTrack>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -30,6 +29,9 @@ pub struct Composition {
     pub start_time: f64,
     pub duration: f64,
     pub elements: Vec<Element>,
+    /// Piste(s) audio de la scène. `AudioTrack.start_time` est relatif au début de cette
+    /// composition (même convention que `ElementBase.start_time`), pas à la timeline globale.
+    pub audio_tracks: Vec<AudioTrack>,
     pub transition_in: Option<Transition>,
     pub transition_out: Option<Transition>,
     /// Chevauchement temporel (secondes) avec la composition suivante, pour les fondus-enchaînés.
@@ -158,6 +160,8 @@ pub struct AudioTrack {
     pub id: String,
     pub name: String,
     pub src: String,
+    /// Relatif au début de la composition qui contient cette piste (même convention que
+    /// `ElementBase.start_time`).
     pub start_time: f64,
     pub duration: Option<f64>,
     pub volume: f64,
@@ -167,6 +171,8 @@ pub struct AudioTrack {
     /// Durée (secondes) du fondu de sortie.
     pub fade_out: f64,
     pub muted: bool,
+    /// Si au moins une piste du projet a `solo = true`, seules les pistes solo sont audibles.
+    pub solo: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]

@@ -61,6 +61,7 @@ mod tests {
             start_time: 0.0,
             duration,
             elements: vec![],
+            audio_tracks: vec![],
             transition_in: None,
             transition_out: None,
             overlap_next,
@@ -75,7 +76,6 @@ mod tests {
             fps: 30,
             duration: 0.0,
             compositions,
-            audio_tracks: vec![],
         }
     }
 

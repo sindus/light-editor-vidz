@@ -104,16 +104,18 @@ export default function Timeline({
     });
   }
 
-  function startAudioDrag(track: AudioTrack, mode: "move" | "resize", e: ReactPointerEvent) {
+  function startAudioDrag(comp: Composition, track: AudioTrack, mode: "move" | "resize", e: ReactPointerEvent) {
     onSelectElement(track.id);
     const startStartTime = track.start_time;
-    const startDuration = track.duration ?? Math.max(1, project.duration - track.start_time);
+    const startDuration = track.duration ?? Math.max(1, comp.duration - track.start_time);
     startHorizontalDrag(e, (deltaPx) => {
       const deltaSec = deltaPx / pxPerSec;
       if (mode === "move") {
-        onUpdateAudioTiming(track.id, Math.max(0, startStartTime + deltaSec), startDuration);
+        const newStart = Math.max(0, Math.min(comp.duration - MIN_DURATION, startStartTime + deltaSec));
+        onUpdateAudioTiming(track.id, newStart, startDuration);
       } else {
-        onUpdateAudioTiming(track.id, startStartTime, Math.max(MIN_DURATION, startDuration + deltaSec));
+        const newDuration = Math.max(MIN_DURATION, Math.min(comp.duration - startStartTime, startDuration + deltaSec));
+        onUpdateAudioTiming(track.id, startStartTime, newDuration);
       }
     });
   }
@@ -279,21 +281,24 @@ export default function Timeline({
           ))}
 
           <div className="timeline-lane" onPointerDown={handleRulerPointerDown}>
-            {project.audio_tracks
+            {activeComp?.audio_tracks
               .filter((track) => matchesQuery(track.name))
               .map((track) => {
-                const dur = track.duration ?? Math.max(1, project.duration - track.start_time);
-                const left = track.start_time * pxPerSec;
+                const dur = track.duration ?? Math.max(1, activeComp.duration - track.start_time);
+                const left = (activeComp.start_time + track.start_time) * pxPerSec;
                 const width = Math.max(10, dur * pxPerSec - 2);
                 return (
                   <div
                     key={track.id}
                     className={`timeline-clip${selectedElementIds.includes(track.id) ? " selected" : ""}`}
                     style={{ left, width, background: "var(--color-audio)" }}
-                    onPointerDown={(e) => startAudioDrag(track, "move", e)}
+                    onPointerDown={(e) => startAudioDrag(activeComp, track, "move", e)}
                   >
                     <span className="timeline-clip-name">{track.name}</span>
-                    <span className="timeline-clip-resize" onPointerDown={(e) => startAudioDrag(track, "resize", e)} />
+                    <span
+                      className="timeline-clip-resize"
+                      onPointerDown={(e) => startAudioDrag(activeComp, track, "resize", e)}
+                    />
                   </div>
                 );
               })}

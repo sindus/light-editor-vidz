@@ -179,6 +179,39 @@ fn shape_for(anim_type: AnimationType, p: f64) -> ResolvedTransform {
     }
 }
 
+/// Progression (0..1) d'une animation individuelle sur sa fenêtre in/out, easing appliqué.
+/// Factorisé hors de `resolve_element_animations` car aussi utilisé par `resolve_text_reveal`
+/// (typewriter/word-reveal/line-reveal), qui a besoin de la progression brute plutôt que
+/// d'une `ResolvedTransform`.
+fn animation_progress(anim: &Animation, local_element_time: f64, active_duration: f64) -> f64 {
+    let duration = anim.duration.max(0.01);
+    let raw = match anim.direction {
+        AnimationDirection::In => local_element_time / duration,
+        AnimationDirection::Out => (local_element_time - (active_duration - duration)) / duration,
+    };
+    let eased = apply_ease(raw.clamp(0.0, 1.0), anim.easing);
+    let progress = match anim.direction {
+        AnimationDirection::In => eased,
+        AnimationDirection::Out => 1.0 - eased,
+    };
+    match anim.direction {
+        AnimationDirection::In => {
+            if local_element_time >= duration {
+                1.0
+            } else {
+                progress
+            }
+        }
+        AnimationDirection::Out => {
+            if local_element_time <= active_duration - duration {
+                1.0
+            } else {
+                progress
+            }
+        }
+    }
+}
+
 /// `local_element_time` : temps écoulé depuis `start_time` de l'élément.
 /// `active_duration` : durée totale d'activité de l'élément dans la composition.
 pub fn resolve_element_animations(
@@ -188,35 +221,7 @@ pub fn resolve_element_animations(
 ) -> ResolvedTransform {
     let mut acc = ResolvedTransform::default();
     for anim in animations {
-        let duration = anim.duration.max(0.01);
-        let raw = match anim.direction {
-            AnimationDirection::In => local_element_time / duration,
-            AnimationDirection::Out => {
-                (local_element_time - (active_duration - duration)) / duration
-            }
-        };
-        let eased = apply_ease(raw.clamp(0.0, 1.0), anim.easing);
-        let progress = match anim.direction {
-            AnimationDirection::In => eased,
-            AnimationDirection::Out => 1.0 - eased,
-        };
-        let clamped_progress = match anim.direction {
-            AnimationDirection::In => {
-                if local_element_time >= duration {
-                    1.0
-                } else {
-                    progress
-                }
-            }
-            AnimationDirection::Out => {
-                if local_element_time <= active_duration - duration {
-                    1.0
-                } else {
-                    progress
-                }
-            }
-        };
-
+        let clamped_progress = animation_progress(anim, local_element_time, active_duration);
         let shape = shape_for(anim.animation_type, clamped_progress);
         let is_fade_type = matches!(
             anim.animation_type,
@@ -242,6 +247,29 @@ pub fn resolve_element_animations(
         acc.blur_px = acc.blur_px.max(shape.blur_px);
     }
     acc
+}
+
+/// Animation de révélation de texte (typewriter/word-reveal/line-reveal), réservée au texte et
+/// non exprimable via `ResolvedTransform` (une transform affine) : le rendu doit savoir combien
+/// de caractères/mots/lignes afficher, pas juste une opacité/position. Retourne le premier type
+/// de révélation trouvé parmi les animations de l'élément, avec sa progression (0..1).
+pub fn resolve_text_reveal(
+    animations: &[Animation],
+    local_element_time: f64,
+    active_duration: f64,
+) -> Option<(AnimationType, f64)> {
+    animations.iter().find_map(|anim| {
+        matches!(
+            anim.animation_type,
+            AnimationType::Typewriter | AnimationType::WordReveal | AnimationType::LineReveal
+        )
+        .then(|| {
+            (
+                anim.animation_type,
+                animation_progress(anim, local_element_time, active_duration),
+            )
+        })
+    })
 }
 
 fn transition_shape(transition_type: TransitionType, progress: f64) -> ResolvedTransform {
@@ -484,5 +512,21 @@ mod tests {
         };
         assert!(resolve_wipe(Some(&fade), AnimationDirection::In, 0.5, 2.0).is_none());
         assert!(resolve_wipe(None, AnimationDirection::In, 0.5, 2.0).is_none());
+    }
+
+    #[test]
+    fn resolve_text_reveal_finds_the_first_reveal_type_animation() {
+        let animations = [
+            anim(AnimationType::Fade, AnimationDirection::In),
+            anim(AnimationType::Typewriter, AnimationDirection::In),
+        ];
+        let result = resolve_text_reveal(&animations, 0.5, 2.0);
+        assert!(matches!(result, Some((AnimationType::Typewriter, p)) if (p - 0.5).abs() < 0.01));
+    }
+
+    #[test]
+    fn resolve_text_reveal_is_none_without_a_reveal_animation() {
+        let animations = [anim(AnimationType::Fade, AnimationDirection::In)];
+        assert!(resolve_text_reveal(&animations, 0.5, 2.0).is_none());
     }
 }

@@ -87,6 +87,12 @@ const ANIMATION_OPTIONS: { type: AnimationType; labelKey: string }[] = [
   { type: "spin", labelKey: "properties.animSpin" },
 ];
 
+const TEXT_ONLY_ANIMATION_OPTIONS: { type: AnimationType; labelKey: string }[] = [
+  { type: "typewriter", labelKey: "properties.animTypewriter" },
+  { type: "word-reveal", labelKey: "properties.animWordReveal" },
+  { type: "line-reveal", labelKey: "properties.animLineReveal" },
+];
+
 const EASING_OPTIONS: { value: Easing; labelKey: string }[] = [
   { value: "linear", labelKey: "properties.easingLinear" },
   { value: "power1-in", labelKey: "properties.easingPower1In" },
@@ -111,6 +117,7 @@ const DEFAULT_ANIMATION: Animation = {
 
 function AnimationFields({ element, onUpdate }: { element: Element; onUpdate: Props["onUpdate"] }) {
   const { t } = useTranslation();
+  const options = element.type === "text" ? [...ANIMATION_OPTIONS, ...TEXT_ONLY_ANIMATION_OPTIONS] : ANIMATION_OPTIONS;
 
   function addAnimation() {
     onUpdate({ animations: [...element.animations, { ...DEFAULT_ANIMATION }] });
@@ -140,7 +147,7 @@ function AnimationFields({ element, onUpdate }: { element: Element; onUpdate: Pr
               value={anim.animation_type}
               onChange={(e) => updateAnimation(i, { animation_type: e.target.value as AnimationType })}
             >
-              {ANIMATION_OPTIONS.map((opt) => (
+              {options.map((opt) => (
                 <option key={opt.type} value={opt.type}>
                   {t(opt.labelKey)}
                 </option>
@@ -461,14 +468,24 @@ function AudioProperties({ track, onUpdate }: { track: AudioTrack; onUpdate: Pro
       <div className="properties-section">
         <div className="properties-row properties-row-header">
           <span className="properties-label">Volume</span>
-          <button
-            type="button"
-            className={`properties-toggle${track.muted ? " active" : ""}`}
-            onClick={() => onUpdate({ muted: !track.muted })}
-            title={t("properties.mute")}
-          >
-            {track.muted ? t("properties.muted") : t("properties.mute")}
-          </button>
+          <div className="properties-row">
+            <button
+              type="button"
+              className={`properties-toggle${track.solo ? " active" : ""}`}
+              onClick={() => onUpdate({ solo: !track.solo })}
+              title={t("properties.solo")}
+            >
+              {t("properties.solo")}
+            </button>
+            <button
+              type="button"
+              className={`properties-toggle${track.muted ? " active" : ""}`}
+              onClick={() => onUpdate({ muted: !track.muted })}
+              title={t("properties.mute")}
+            >
+              {track.muted ? t("properties.muted") : t("properties.mute")}
+            </button>
+          </div>
         </div>
         <input
           type="range"

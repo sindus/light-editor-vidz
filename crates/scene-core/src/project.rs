@@ -28,11 +28,11 @@ pub fn new_project(opts: NewProjectOptions) -> Project {
             start_time: 0.0,
             duration: DEFAULT_COMPOSITION_DURATION,
             elements: vec![],
+            audio_tracks: vec![],
             transition_in: None,
             transition_out: None,
             overlap_next: 0.0,
         }],
-        audio_tracks: vec![],
     };
     recompute_start_times(&mut project);
     project

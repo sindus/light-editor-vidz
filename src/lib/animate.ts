@@ -119,6 +119,29 @@ function shapeFor(type: AnimationType, progress: number): ResolvedTransform {
   }
 }
 
+/** Progression (0..1) d'une animation individuelle, easing appliqué. Factorisé pour être
+ * réutilisé par `resolveTextReveal` (typewriter/word-reveal/line-reveal). */
+function animationProgress(anim: Animation, localElementTime: number, activeDuration: number): number {
+  const duration = Math.max(0.01, anim.duration);
+  let raw: number;
+  if (anim.direction === "in") {
+    raw = localElementTime / duration;
+  } else {
+    const windowStart = activeDuration - duration;
+    raw = (localElementTime - windowStart) / duration;
+  }
+  const eased = applyEase(Math.min(1, Math.max(0, raw)), anim.easing);
+  const progress = anim.direction === "in" ? eased : 1 - eased;
+  // En dehors de la fenêtre d'animation, l'élément reste dans son état final (posé).
+  return anim.direction === "in"
+    ? localElementTime >= duration
+      ? 1
+      : progress
+    : localElementTime <= activeDuration - duration
+      ? 1
+      : progress;
+}
+
 /**
  * @param localElementTime temps écoulé depuis `el.start_time` (peut être négatif si pas encore actif).
  * @param activeDuration durée totale d'activité de l'élément dans la composition.
@@ -130,26 +153,7 @@ export function resolveElementAnimations(
 ): ResolvedTransform {
   const acc = identity();
   for (const anim of animations) {
-    const duration = Math.max(0.01, anim.duration);
-    let raw: number;
-    if (anim.direction === "in") {
-      raw = localElementTime / duration;
-    } else {
-      const windowStart = activeDuration - duration;
-      raw = (localElementTime - windowStart) / duration;
-    }
-    const eased = applyEase(Math.min(1, Math.max(0, raw)), anim.easing);
-    const progress = anim.direction === "in" ? eased : 1 - eased;
-    // En dehors de la fenêtre d'animation, l'élément reste dans son état final (posé).
-    const clampedProgress =
-      anim.direction === "in"
-        ? localElementTime >= duration
-          ? 1
-          : progress
-        : localElementTime <= activeDuration - duration
-          ? 1
-          : progress;
-
+    const clampedProgress = animationProgress(anim, localElementTime, activeDuration);
     const shape = shapeFor(anim.animation_type, clampedProgress);
     const opacityFactor =
       anim.with_fade ||
@@ -181,6 +185,52 @@ export function transformToCss(t: ResolvedTransform): { transform: string; filte
     filter: t.blurPx ? `blur(${t.blurPx}px)` : "",
     opacity: t.opacity,
   };
+}
+
+/**
+ * Animation de révélation de texte (typewriter/word-reveal/line-reveal), réservée au texte et
+ * non exprimable via `ResolvedTransform`. Retourne le premier type de révélation trouvé parmi
+ * les animations de l'élément, avec sa progression (0..1). Miroir de `resolve_text_reveal` (Rust).
+ */
+export function resolveTextReveal(
+  animations: Animation[],
+  localElementTime: number,
+  activeDuration: number,
+): { type: "typewriter" | "word-reveal" | "line-reveal"; progress: number } | null {
+  for (const anim of animations) {
+    if (
+      anim.animation_type === "typewriter" ||
+      anim.animation_type === "word-reveal" ||
+      anim.animation_type === "line-reveal"
+    ) {
+      return { type: anim.animation_type, progress: animationProgress(anim, localElementTime, activeDuration) };
+    }
+  }
+  return null;
+}
+
+/**
+ * Applique une révélation de texte au contenu affiché. `line-reveal` est approximé en ne
+ * révélant que les sauts de ligne explicites du contenu (pas le retour à la ligne automatique
+ * du navigateur, qui dépend de la mise en page réelle — connu comme une divergence mineure
+ * avec le rendu natif à l'export, voir `raster::draw_text` côté Rust).
+ */
+export function applyTextReveal(
+  content: string,
+  reveal: { type: "typewriter" | "word-reveal" | "line-reveal"; progress: number } | null,
+): string {
+  if (!reveal) return content;
+  const { type, progress } = reveal;
+  if (type === "typewriter") {
+    const chars = Array.from(content);
+    return chars.slice(0, Math.round(chars.length * progress)).join("");
+  }
+  if (type === "word-reveal") {
+    const words = content.split(/\s+/).filter(Boolean);
+    return words.slice(0, Math.round(words.length * progress)).join(" ");
+  }
+  const lines = content.split("\n");
+  return lines.slice(0, Math.round(lines.length * progress)).join("\n");
 }
 
 /** Transitions de composition (fondu-enchaîné entre scènes), même principe simplifié que les animations d'élément. */

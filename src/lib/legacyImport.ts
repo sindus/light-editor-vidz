@@ -280,10 +280,30 @@ function convertComposition(
     start_time: Number(comp.startTime) || 0,
     duration: Number(comp.duration) || fallbackDuration,
     elements,
+    audio_tracks: [],
     transition_in: convertTransition(comp.transitionIn),
     transition_out: convertTransition(comp.transitionOut),
     overlap_next: Number(comp.overlapNext) || 0,
   };
+}
+
+/**
+ * L'ancien format stockait les pistes audio au niveau du projet, avec un `startTime` absolu sur
+ * la timeline globale. Le nouveau modèle les scope par composition avec un `start_time` relatif
+ * (même convention que les éléments) : chaque piste est assignée à la composition dont la
+ * fenêtre temporelle la contient (la dernière composition sert de repli au-delà de la fin).
+ */
+function assignAudioTracksToCompositions(compositions: Composition[], tracks: AudioTrack[]): Composition[] {
+  if (compositions.length === 0 || tracks.length === 0) return compositions;
+  const byComposition = new Map<string, AudioTrack[]>(compositions.map((c) => [c.id, []]));
+  for (const track of tracks) {
+    const absoluteStart = track.start_time;
+    const target =
+      compositions.find((c) => absoluteStart >= c.start_time && absoluteStart < c.start_time + c.duration) ??
+      compositions[compositions.length - 1];
+    byComposition.get(target.id)?.push({ ...track, start_time: Math.max(0, absoluteStart - target.start_time) });
+  }
+  return compositions.map((c) => ({ ...c, audio_tracks: byComposition.get(c.id) ?? [] }));
 }
 
 function convertAudioTrack(raw: unknown): AudioTrack | null {
@@ -300,6 +320,7 @@ function convertAudioTrack(raw: unknown): AudioTrack | null {
     fade_in: 0,
     fade_out: 0,
     muted: false,
+    solo: false,
   };
 }
 
@@ -314,12 +335,14 @@ export function parseLegacyProjectJSON(raw: unknown): Project {
     ? data.compositions.map((c) => convertComposition(c, width, height, duration))
     : [];
 
-  const audio_tracks = Array.isArray(data.audioTracks)
+  const audioTracks = Array.isArray(data.audioTracks)
     ? data.audioTracks.flatMap((t) => {
         const converted = convertAudioTrack(t);
         return converted ? [converted] : [];
       })
     : [];
+
+  const finalCompositions = compositions.length > 0 ? compositions : [convertComposition({}, width, height, duration)];
 
   return {
     name: typeof data.name === "string" ? data.name : "Projet importé",
@@ -327,7 +350,6 @@ export function parseLegacyProjectJSON(raw: unknown): Project {
     height,
     fps: 30,
     duration,
-    compositions: compositions.length > 0 ? compositions : [convertComposition({}, width, height, duration)],
-    audio_tracks,
+    compositions: assignAudioTracksToCompositions(finalCompositions, audioTracks),
   };
 }

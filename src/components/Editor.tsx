@@ -191,8 +191,8 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
   }
 
   const active = project ? resolveActiveComposition(project, currentTime) : null;
-  const isAudioSelected = !!project?.audio_tracks.some((t) => t.id === selectedId);
-  const selectedAudioIds = project ? selectedIds.filter((id) => project.audio_tracks.some((t) => t.id === id)) : [];
+  const isAudioSelected = !!project && findAudioTrack(project, selectedId) !== null;
+  const selectedAudioIds = project ? selectedIds.filter((id) => findAudioTrack(project, id) !== null) : [];
   const selectedElementIds = selectedIds.filter((id) => !selectedAudioIds.includes(id));
 
   function addAndSelect(element: ReturnType<typeof createTitleElement>) {
@@ -202,8 +202,9 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
   }
 
   function addAndSelectAudio(relativeSrc: string, name: string) {
+    if (!active) return;
     const track = createAudioTrack(relativeSrc, name);
-    mutate((p) => addAudioTrackToProject(p, track));
+    mutate((p) => addAudioTrackToProject(p, active.composition.id, track));
     setSelectedIds([track.id]);
   }
 
@@ -419,7 +420,7 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
 
   return (
     <div className="editor-root">
-      <AudioPlayer tracks={project.audio_tracks} projectDir={projectDir} currentTime={currentTime} playing={playing} />
+      <AudioPlayer project={project} projectDir={projectDir} currentTime={currentTime} playing={playing} />
       <TopBar
         project={project}
         projectDir={projectDir}

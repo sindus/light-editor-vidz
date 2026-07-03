@@ -93,6 +93,29 @@ pub struct AudioMixInput {
     pub duration: f64,
 }
 
+/// Indique si `path` contient au moins une piste audio (ex : une source vidéo peut ne pas en
+/// avoir). Best-effort via ffprobe : en cas d'échec (binaire absent, format non lisible), on
+/// suppose "pas d'audio" plutôt que de faire échouer tout l'export sur une vérification annexe.
+pub fn has_audio_stream(path: &Path) -> bool {
+    let output = Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "csv=p=0",
+        ])
+        .arg(path)
+        .output();
+    match output {
+        Ok(out) => out.status.success() && !out.stdout.is_empty(),
+        Err(_) => false,
+    }
+}
+
 /// Mixe/mux les pistes audio sur la vidéo déjà encodée (silencieuse). Si `inputs` est vide,
 /// copie simplement `video_path` vers `output_path`.
 pub fn mux_audio(

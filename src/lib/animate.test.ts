@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   applyEase,
+  applyTextReveal,
   resolveCompositionTransition,
   resolveCompositionWipeClip,
   resolveElementAnimations,
   resolveImagePan,
+  resolveTextReveal,
   transformToCss,
 } from "./animate";
 import type { Animation } from "../bindings/Animation";
@@ -162,5 +164,42 @@ describe("newly implemented transition types (flip/rotate/wipe)", () => {
     const fade: Transition = { transition_type: "fade", duration: 1, easing: "linear" };
     expect(resolveCompositionWipeClip(fade, null, 0.5, 2)).toBe("");
     expect(resolveCompositionWipeClip(null, null, 0.5, 2)).toBe("");
+  });
+});
+
+describe("resolveTextReveal / applyTextReveal (typewriter/word-reveal/line-reveal)", () => {
+  it("resolveTextReveal finds the first reveal-type animation among the element's animations", () => {
+    const anims: Animation[] = [
+      { animation_type: "fade", direction: "in", duration: 1, easing: "linear", with_fade: true },
+      { animation_type: "typewriter", direction: "in", duration: 1, easing: "linear", with_fade: false },
+    ];
+    const reveal = resolveTextReveal(anims, 0.5, 2);
+    expect(reveal?.type).toBe("typewriter");
+    expect(reveal?.progress).toBeCloseTo(0.5, 1);
+  });
+
+  it("returns null when no reveal animation is present", () => {
+    const anims: Animation[] = [
+      { animation_type: "fade", direction: "in", duration: 1, easing: "linear", with_fade: true },
+    ];
+    expect(resolveTextReveal(anims, 0.5, 2)).toBeNull();
+  });
+
+  it("applyTextReveal reveals a growing prefix of characters for typewriter", () => {
+    expect(applyTextReveal("Bonjour", { type: "typewriter", progress: 0 })).toBe("");
+    expect(applyTextReveal("Bonjour", { type: "typewriter", progress: 1 })).toBe("Bonjour");
+    expect(applyTextReveal("Bonjour", { type: "typewriter", progress: 0.5 })).toHaveLength(4);
+  });
+
+  it("applyTextReveal reveals whole words for word-reveal", () => {
+    expect(applyTextReveal("un deux trois quatre", { type: "word-reveal", progress: 0.5 })).toBe("un deux");
+  });
+
+  it("applyTextReveal reveals whole lines for line-reveal", () => {
+    expect(applyTextReveal("a\nb\nc\nd", { type: "line-reveal", progress: 0.5 })).toBe("a\nb");
+  });
+
+  it("applyTextReveal returns the content unchanged when there is no reveal", () => {
+    expect(applyTextReveal("Bonjour", null)).toBe("Bonjour");
   });
 });

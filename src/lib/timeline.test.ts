@@ -18,6 +18,7 @@ function comp(id: string, duration: number, overlapNext = 0): Composition {
     start_time: 0,
     duration,
     elements: [],
+    audio_tracks: [],
     transition_in: null,
     transition_out: null,
     overlap_next: overlapNext,
@@ -25,7 +26,7 @@ function comp(id: string, duration: number, overlapNext = 0): Composition {
 }
 
 function project(compositions: Composition[]): Project {
-  return { name: "p", width: 1920, height: 1080, fps: 30, duration: 0, compositions, audio_tracks: [] };
+  return { name: "p", width: 1920, height: 1080, fps: 30, duration: 0, compositions };
 }
 
 describe("recomputeStartTimes", () => {

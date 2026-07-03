@@ -9,11 +9,12 @@
 //! elles sont appliquées comme un masque de clip rectangulaire (voir `wipe_rect`).
 
 use crate::animate::{
-    resolve_composition_transition, resolve_element_animations, resolve_image_pan, resolve_wipe,
-    ResolvedTransform,
+    resolve_composition_transition, resolve_element_animations, resolve_image_pan,
+    resolve_text_reveal, resolve_wipe, ResolvedTransform,
 };
 use crate::model::{
-    AnimationDirection, Composition, Element, FitMode, Project, ShapeType, TransitionType,
+    AnimationDirection, AnimationType, Composition, Element, FitMode, Project, ShapeType,
+    TransitionType,
 };
 use crate::timeline::{is_element_active, resolve_active_composition};
 use cosmic_text::{
@@ -308,6 +309,8 @@ impl FrameRenderer {
 
             match el {
                 Element::Text(text_el) => {
+                    let reveal =
+                        resolve_text_reveal(&base.animations, local_element_time, active_duration);
                     self.draw_text(
                         scene,
                         text_el,
@@ -319,6 +322,7 @@ impl FrameRenderer {
                         anim.blur_px as f32,
                         transform,
                         base.blend_mode,
+                        reveal,
                     );
                 }
                 Element::Shape(shape_el) => {
@@ -496,11 +500,29 @@ impl FrameRenderer {
         blur_px: f32,
         transform: Transform,
         blend_mode: Option<crate::model::BlendMode>,
+        reveal: Option<(AnimationType, f64)>,
     ) {
         let layer_w = w_px.ceil().max(1.0) as u32;
         let layer_h = h_px.ceil().max(1.0) as u32;
         let Some(mut layer) = Pixmap::new(layer_w, layer_h) else {
             return;
+        };
+
+        // Typewriter/word-reveal tronquent le contenu affiché avant la mise en page ; line-reveal
+        // a besoin de la mise en page complète pour connaître le nombre de lignes (calculé plus
+        // bas, une fois le texte affiché shapé).
+        let display_content: std::borrow::Cow<str> = match reveal {
+            Some((AnimationType::Typewriter, progress)) => {
+                let total_chars = text_el.content.chars().count();
+                let visible = ((total_chars as f64) * progress).round().max(0.0) as usize;
+                std::borrow::Cow::Owned(text_el.content.chars().take(visible).collect())
+            }
+            Some((AnimationType::WordReveal, progress)) => {
+                let words: Vec<&str> = text_el.content.split_whitespace().collect();
+                let visible = ((words.len() as f64) * progress).round().max(0.0) as usize;
+                std::borrow::Cow::Owned(words[..visible.min(words.len())].join(" "))
+            }
+            _ => std::borrow::Cow::Borrowed(text_el.content.as_str()),
         };
 
         let font_size_px = match text_el.font_size {
@@ -523,8 +545,16 @@ impl FrameRenderer {
             .map(Family::Name)
             .unwrap_or(Family::SansSerif);
         let attrs = Attrs::new().family(family).weight(weight);
-        buffer.set_text(&text_el.content, &attrs, Shaping::Advanced, None);
+        buffer.set_text(&display_content, &attrs, Shaping::Advanced, None);
         buffer.shape_until_scroll(&mut self.font_system, false);
+
+        let max_visible_lines: Option<usize> = match reveal {
+            Some((AnimationType::LineReveal, progress)) => {
+                let total_lines = buffer.layout_runs().count();
+                Some(((total_lines as f64) * progress).round().max(0.0) as usize)
+            }
+            _ => None,
+        };
 
         let color = parse_css_color(&text_el.color);
         let cosmic_color = CosmicColor::rgba(
@@ -555,7 +585,10 @@ impl FrameRenderer {
                 (shadow.alpha() * 255.0) as u8,
             );
             let offset = (font_size_px * 0.06).max(1.0);
-            for run in buffer.layout_runs() {
+            for (run_idx, run) in buffer.layout_runs().enumerate() {
+                if max_visible_lines.is_some_and(|max| run_idx >= max) {
+                    continue;
+                }
                 let mut cumulative_spacing = 0.0f32;
                 for glyph in run.glyphs {
                     let physical = glyph.physical(
@@ -591,7 +624,10 @@ impl FrameRenderer {
         // Texte principal ; on garde au passage les bornes de chaque ligne pour le
         // souligné/barré (dessinés après, une fois toutes les lignes connues).
         let mut line_bounds: Vec<(f32, f32, f32)> = Vec::new();
-        for run in buffer.layout_runs() {
+        for (run_idx, run) in buffer.layout_runs().enumerate() {
+            if max_visible_lines.is_some_and(|max| run_idx >= max) {
+                continue;
+            }
             let mut cumulative_spacing = 0.0f32;
             let mut min_x = f32::MAX;
             let mut max_x = f32::MIN;
@@ -1171,11 +1207,11 @@ mod tests {
                         strikethrough: false,
                     }),
                 ],
+                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
-            audio_tracks: vec![],
         }
     }
 
@@ -1275,6 +1311,87 @@ mod tests {
             "une boîte plus petite doit produire une taille de police plus petite (large={large}, small={small})"
         );
         assert!(renderer.text_fits_at_size(&text_el, small, 80.0, 40.0));
+    }
+
+    #[test]
+    fn typewriter_reveal_grows_the_visible_text_width_over_time() {
+        let project = Project {
+            name: "Test".into(),
+            width: 400,
+            height: 100,
+            fps: 30,
+            duration: 2.0,
+            compositions: vec![Composition {
+                id: "c1".into(),
+                name: "Scene 1".into(),
+                start_time: 0.0,
+                duration: 2.0,
+                elements: vec![Element::Text(TextElement {
+                    base: ElementBase {
+                        id: "t1".into(),
+                        name: "Titre".into(),
+                        start_time: 0.0,
+                        duration: None,
+                        x: 0.0,
+                        y: 0.0,
+                        width: 100.0,
+                        height: 100.0,
+                        rotation: 0.0,
+                        animations: vec![Animation {
+                            animation_type: AnimationType::Typewriter,
+                            direction: AnimationDirection::In,
+                            duration: 2.0,
+                            easing: Easing::Linear,
+                            with_fade: false,
+                        }],
+                        group_id: None,
+                        blend_mode: None,
+                    },
+                    content: "WWWWWWWWWWWWWWWWWWWW".into(),
+                    alignment: TextAlign::Left,
+                    vertical_alignment: VerticalAlign::Top,
+                    color: "rgba(255,255,255,1)".into(),
+                    background_color: None,
+                    font_size: Some(8.0),
+                    font_family: None,
+                    font_weight: None,
+                    font_style: None,
+                    letter_spacing: None,
+                    line_height: None,
+                    text_shadow: None,
+                    underline: false,
+                    strikethrough: false,
+                })],
+                audio_tracks: vec![],
+                transition_in: None,
+                transition_out: None,
+                overlap_next: 0.0,
+            }],
+        };
+        let mut renderer = FrameRenderer::new();
+        let dir = std::env::temp_dir();
+
+        let rightmost_lit_column = |frame: &Pixmap| -> i32 {
+            let mut rightmost = -1;
+            for x in 0..frame.width() as i32 {
+                for y in 0..frame.height() as i32 {
+                    let p = frame.pixel(x as u32, y as u32).unwrap();
+                    if p.red() > 50 || p.green() > 50 || p.blue() > 50 {
+                        rightmost = rightmost.max(x);
+                    }
+                }
+            }
+            rightmost
+        };
+
+        let early = renderer.render_frame(&project, &dir, 0.1);
+        let late = renderer.render_frame(&project, &dir, 1.9);
+        let early_extent = rightmost_lit_column(&early);
+        let late_extent = rightmost_lit_column(&late);
+        assert!(
+            early_extent < late_extent,
+            "le texte révélé doit s'étendre davantage vers la droite avec le temps (early={early_extent}, late={late_extent})"
+        );
     }
 
     #[test]
@@ -1632,11 +1749,11 @@ mod tests {
                     volume: 1.0,
                     playback_speed: 1.0,
                 })],
+                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
-            audio_tracks: vec![],
         };
 
         let mut renderer = FrameRenderer::with_scratch_dir(dir.join("scratch"));

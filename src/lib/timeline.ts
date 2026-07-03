@@ -28,6 +28,7 @@ export function addComposition(project: Project): Project {
     start_time: 0,
     duration: DEFAULT_COMPOSITION_DURATION,
     elements: [],
+    audio_tracks: [],
     transition_in: null,
     transition_out: null,
     overlap_next: 0,
