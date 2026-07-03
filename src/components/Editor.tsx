@@ -21,9 +21,12 @@ import {
   distributeElements,
   duplicateElementsInProject,
   findElement,
+  groupElements,
+  groupMembers,
   moveElementToIndex,
   reorderElementInProject,
   splitElementInProject,
+  ungroupElements,
   updateElementInProject,
   updateElementTiming,
   type ElementPatch,
@@ -205,7 +208,24 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
   }
 
   function handleUpdateElement(elementId: string, patch: ElementPatch) {
-    mutate((p) => updateElementInProject(p, elementId, patch));
+    mutate((p) => {
+      const next = updateElementInProject(p, elementId, patch);
+      // Déplacement groupé : si l'élément fait partie d'un groupe et que x/y a changé,
+      // applique le même delta aux autres membres pour qu'ils bougent ensemble.
+      if (!active || (patch.x === undefined && patch.y === undefined)) return next;
+      const before = findElement(p, elementId);
+      const after = findElement(next, elementId);
+      if (!before || !after) return next;
+      const dx = after.x - before.x;
+      const dy = after.y - before.y;
+      if (dx === 0 && dy === 0) return next;
+      const siblings = groupMembers(p, active.composition.id, elementId).filter((id) => id !== elementId);
+      return siblings.reduce(
+        (acc, id) =>
+          updateElementInProject(acc, id, { x: findElement(acc, id)!.x + dx, y: findElement(acc, id)!.y + dy }),
+        next,
+      );
+    });
   }
 
   function handleUpdateAudio(patch: Partial<AudioTrack>) {
@@ -229,8 +249,19 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
     }
     setSelectedIds((prev) => {
       if (additive) return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (project && active) return groupMembers(project, active.composition.id, id);
       return [id];
     });
+  }
+
+  function handleGroup() {
+    if (!active || selectedElementIds.length < 2) return;
+    mutate((p) => groupElements(p, active.composition.id, selectedElementIds));
+  }
+
+  function handleUngroup() {
+    if (!active || selectedElementIds.length === 0) return;
+    mutate((p) => ungroupElements(p, active.composition.id, selectedElementIds));
   }
 
   function handleMarqueeSelect(ids: string[], additive: boolean) {
@@ -338,6 +369,12 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
       } else if (e.key.toLowerCase() === "a" && (e.metaKey || e.ctrlKey) && active) {
         e.preventDefault();
         setSelectedIds(active.composition.elements.map((el) => el.id));
+      } else if (e.key.toLowerCase() === "g" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        handleUngroup();
+      } else if (e.key.toLowerCase() === "g" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleGroup();
       } else if (e.key === "Escape") {
         setSelectedIds([]);
       } else if (e.key.toLowerCase() === "z" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
@@ -456,6 +493,8 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
           }}
           onAlign={handleAlign}
           onDistribute={handleDistribute}
+          onGroup={handleGroup}
+          onUngroup={handleUngroup}
         />
       </div>
       <Timeline

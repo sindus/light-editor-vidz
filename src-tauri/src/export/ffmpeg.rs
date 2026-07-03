@@ -73,6 +73,11 @@ pub struct AudioMixInput {
     /// Position (secondes) sur la timeline globale à laquelle la piste doit démarrer.
     pub start_time: f64,
     pub volume: f64,
+    /// Durée (secondes) du fondu d'entrée/sortie ; 0.0 = pas de fondu.
+    pub fade_in: f64,
+    pub fade_out: f64,
+    /// Durée totale (secondes) de la piste dans le mix, nécessaire pour placer le fade-out.
+    pub duration: f64,
 }
 
 /// Mixe/mux les pistes audio sur la vidéo déjà encodée (silencieuse). Si `inputs` est vide,
@@ -101,10 +106,22 @@ pub fn mux_audio(
         let idx = i + 1; // 0 = vidéo
         let label = format!("a{i}");
         let delay_ms = (input.start_time.max(0.0) * 1000.0).round() as i64;
-        filter.push_str(&format!(
-            "[{idx}:a]adelay={delay_ms}|{delay_ms},volume={vol}[{label}];",
+        let mut chain = format!(
+            "[{idx}:a]adelay={delay_ms}|{delay_ms},volume={vol}",
             vol = input.volume.clamp(0.0, 2.0)
-        ));
+        );
+        if input.fade_in > 0.0 {
+            chain.push_str(&format!(",afade=t=in:st=0:d={}", input.fade_in));
+        }
+        if input.fade_out > 0.0 {
+            let fade_out_start = (input.start_time + input.duration - input.fade_out).max(0.0);
+            chain.push_str(&format!(
+                ",afade=t=out:st={}:d={}",
+                fade_out_start, input.fade_out
+            ));
+        }
+        chain.push_str(&format!("[{label}];"));
+        filter.push_str(&chain);
         mix_labels.push(format!("[{label}]"));
     }
     if inputs.len() == 1 {

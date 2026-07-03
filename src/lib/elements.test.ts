@@ -16,9 +16,12 @@ import {
   duplicateElementInProject,
   duplicateElementsInProject,
   findElement,
+  groupElements,
+  groupMembers,
   moveElementToIndex,
   reorderElementInProject,
   splitElementInProject,
+  ungroupElements,
   updateElementInProject,
 } from "./elements";
 
@@ -240,5 +243,55 @@ describe("moveElementToIndex", () => {
     p = addElementToComposition(p, "a", elC);
     const next = moveElementToIndex(p, elC.id, 0);
     expect(next.compositions[0].elements.map((el) => el.id)).toEqual([elC.id, elA.id, elB.id]);
+  });
+});
+
+describe("groupElements / ungroupElements / groupMembers", () => {
+  it("assigns a shared group_id to at least 2 elements", () => {
+    const elA = createTitleElement();
+    const elB = createSubtitleElement();
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    const next = groupElements(p, "a", [elA.id, elB.id]);
+    const groupIdA = next.compositions[0].elements[0].group_id;
+    expect(groupIdA).toBeTruthy();
+    expect(next.compositions[0].elements[1].group_id).toBe(groupIdA);
+  });
+
+  it("is a no-op with fewer than 2 elements", () => {
+    const elA = createTitleElement();
+    const p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    const next = groupElements(p, "a", [elA.id]);
+    expect(next).toEqual(p);
+  });
+
+  it("groupMembers returns just the element itself when not grouped", () => {
+    const elA = createTitleElement();
+    const p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    expect(groupMembers(p, "a", elA.id)).toEqual([elA.id]);
+  });
+
+  it("groupMembers returns every element sharing the same group_id", () => {
+    const elA = createTitleElement();
+    const elB = createSubtitleElement();
+    const elC = createShapeElement("rectangle");
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    p = addElementToComposition(p, "a", elC);
+    p = groupElements(p, "a", [elA.id, elB.id]);
+    expect(groupMembers(p, "a", elA.id).sort()).toEqual([elA.id, elB.id].sort());
+    expect(groupMembers(p, "a", elC.id)).toEqual([elC.id]);
+  });
+
+  it("ungroupElements clears group_id for every member of the touched group(s)", () => {
+    const elA = createTitleElement();
+    const elB = createSubtitleElement();
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    p = groupElements(p, "a", [elA.id, elB.id]);
+    const next = ungroupElements(p, "a", [elA.id]);
+    for (const el of next.compositions[0].elements) {
+      expect(el.group_id).toBeNull();
+    }
   });
 });

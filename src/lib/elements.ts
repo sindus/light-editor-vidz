@@ -24,6 +24,8 @@ type BaseFields = {
   height: number;
   rotation: number;
   animations: [];
+  group_id: string | null;
+  blend_mode: null;
 };
 
 function baseDefaults(name: string, overrides: Partial<BaseFields> = {}): BaseFields {
@@ -38,6 +40,8 @@ function baseDefaults(name: string, overrides: Partial<BaseFields> = {}): BaseFi
     height: 20,
     rotation: 0,
     animations: [],
+    group_id: null,
+    blend_mode: null,
     ...overrides,
   };
 }
@@ -55,6 +59,11 @@ export function createTitleElement(): Element {
     font_family: "Manrope",
     font_weight: "bold",
     font_style: "normal",
+    letter_spacing: null,
+    line_height: null,
+    text_shadow: null,
+    underline: false,
+    strikethrough: false,
   };
 }
 
@@ -71,6 +80,11 @@ export function createSubtitleElement(): Element {
     font_family: "Manrope",
     font_weight: "normal",
     font_style: "normal",
+    letter_spacing: null,
+    line_height: null,
+    text_shadow: null,
+    underline: false,
+    strikethrough: false,
   };
 }
 
@@ -100,6 +114,11 @@ export function createStyledTextElement(preset: TextStylePreset): Element {
     font_family: "Manrope",
     font_weight: p.font_weight,
     font_style: "normal",
+    letter_spacing: null,
+    line_height: null,
+    text_shadow: null,
+    underline: false,
+    strikethrough: false,
   };
 }
 
@@ -111,6 +130,9 @@ export function createImageElement(relativeSrc: string, name: string): Element {
     fit_mode: "cover",
     background_color: null,
     image_pan: null,
+    corner_radius: null,
+    border_color: null,
+    border_width: null,
   };
 }
 
@@ -123,6 +145,11 @@ export function createVideoElement(relativeSrc: string, name: string): Element {
     background_color: null,
     image_pan: null,
     video_offset: 0,
+    corner_radius: null,
+    border_color: null,
+    border_width: null,
+    volume: 1,
+    playback_speed: 1,
   };
 }
 
@@ -144,6 +171,9 @@ export function createShapeElement(shapeType: ShapeType): Element {
     stroke: "none",
     stroke_width: 3,
     border_radius: shapeType === "rectangle" ? 8 : null,
+    stroke_dash: null,
+    gradient_to: null,
+    gradient_angle: null,
   };
 }
 
@@ -370,4 +400,51 @@ export function moveElementToIndex(project: Project, elementId: string, toIndex:
       return { ...comp, elements };
     }),
   };
+}
+
+/** Groupe au moins 2 éléments : ils partagent désormais un `group_id` commun (nouvel uuid). */
+export function groupElements(project: Project, compId: string, elementIds: string[]): Project {
+  if (elementIds.length < 2) return project;
+  const groupId = crypto.randomUUID();
+  return {
+    ...project,
+    compositions: project.compositions.map((comp) =>
+      comp.id === compId
+        ? {
+            ...comp,
+            elements: comp.elements.map((el) =>
+              elementIds.includes(el.id) ? ({ ...el, group_id: groupId } as Element) : el,
+            ),
+          }
+        : comp,
+    ),
+  };
+}
+
+/** Dégroupe : efface `group_id` sur tous les éléments des groupes touchés par `elementIds`. */
+export function ungroupElements(project: Project, compId: string, elementIds: string[]): Project {
+  return {
+    ...project,
+    compositions: project.compositions.map((comp) => {
+      if (comp.id !== compId) return comp;
+      const groupIds = new Set(
+        comp.elements.filter((el) => elementIds.includes(el.id) && el.group_id).map((el) => el.group_id),
+      );
+      if (groupIds.size === 0) return comp;
+      return {
+        ...comp,
+        elements: comp.elements.map((el) =>
+          el.group_id && groupIds.has(el.group_id) ? ({ ...el, group_id: null } as Element) : el,
+        ),
+      };
+    }),
+  };
+}
+
+/** Ids de tous les membres du groupe de `elementId` (juste `[elementId]` s'il n'est pas groupé). */
+export function groupMembers(project: Project, compId: string, elementId: string): string[] {
+  const comp = project.compositions.find((c) => c.id === compId);
+  const el = comp?.elements.find((e) => e.id === elementId);
+  if (!comp || !el || !el.group_id) return [elementId];
+  return comp.elements.filter((e) => e.group_id === el.group_id).map((e) => e.id);
 }

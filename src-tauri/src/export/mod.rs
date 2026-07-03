@@ -36,11 +36,17 @@ pub fn export_video(
     let audio_inputs: Vec<AudioMixInput> = project
         .audio_tracks
         .iter()
+        .filter(|track| !track.muted)
         .map(|track| AudioMixInput {
             path: project_dir.join(&track.src),
             offset: track.audio_offset,
             start_time: track.start_time,
             volume: track.volume,
+            fade_in: track.fade_in.max(0.0),
+            fade_out: track.fade_out.max(0.0),
+            duration: track
+                .duration
+                .unwrap_or(project.duration - track.start_time),
         })
         .collect();
 
@@ -90,12 +96,17 @@ mod tests {
                         height: 50.0,
                         rotation: 0.0,
                         animations: vec![],
+                        group_id: None,
+                        blend_mode: None,
                     },
                     shape_type: ShapeType::Rectangle,
                     fill: "rgba(0,200,0,1)".into(),
                     stroke: "none".into(),
                     stroke_width: 0.0,
                     border_radius: None,
+                    stroke_dash: None,
+                    gradient_to: None,
+                    gradient_angle: None,
                 })],
                 transition_in: None,
                 transition_out: None,

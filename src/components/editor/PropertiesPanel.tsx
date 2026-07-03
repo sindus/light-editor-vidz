@@ -28,8 +28,39 @@ import type { Easing } from "../../bindings/Easing";
 import type { TextAlign } from "../../bindings/TextAlign";
 import type { VerticalAlign } from "../../bindings/VerticalAlign";
 import type { ImagePanType } from "../../bindings/ImagePanType";
+import type { BlendMode } from "../../bindings/BlendMode";
 import type { ElementPatch, AlignEdge } from "../../lib/elements";
 import ColorPickerField from "./ColorPickerField";
+
+const BLEND_MODES: BlendMode[] = ["normal", "multiply", "screen", "overlay", "darken", "lighten"];
+const BLEND_MODE_LABEL_KEYS: Record<BlendMode, string> = {
+  normal: "properties.blendNormal",
+  multiply: "properties.blendMultiply",
+  screen: "properties.blendScreen",
+  overlay: "properties.blendOverlay",
+  darken: "properties.blendDarken",
+  lighten: "properties.blendLighten",
+};
+
+function BlendModeField({ value, onChange }: { value: BlendMode | null; onChange: (v: BlendMode | null) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="properties-section">
+      <span className="properties-label">{t("properties.blendMode")}</span>
+      <select
+        className="properties-input"
+        value={value ?? "normal"}
+        onChange={(e) => onChange(e.target.value === "normal" ? null : (e.target.value as BlendMode))}
+      >
+        {BLEND_MODES.map((m) => (
+          <option key={m} value={m}>
+            {t(BLEND_MODE_LABEL_KEYS[m])}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 const FIT_MODES = ["cover", "stretch", "fit-largest", "fit-width", "fit-height"] as const;
 
@@ -241,6 +272,8 @@ interface Props {
   onDeleteLayer: (id: string) => void;
   onAlign: (edge: AlignEdge) => void;
   onDistribute: (axis: "horizontal" | "vertical") => void;
+  onGroup: () => void;
+  onUngroup: () => void;
 }
 
 const ICON_BY_TYPE: Record<Element["type"], React.ReactNode> = {
@@ -313,10 +346,14 @@ function MultiSelectionProperties({
   count,
   onAlign,
   onDistribute,
+  onGroup,
+  onUngroup,
 }: {
   count: number;
   onAlign: Props["onAlign"];
   onDistribute: Props["onDistribute"];
+  onGroup: Props["onGroup"];
+  onUngroup: Props["onUngroup"];
 }) {
   const { t } = useTranslation();
   return (
@@ -395,6 +432,17 @@ function MultiSelectionProperties({
           </button>
         </div>
       </div>
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.group")}</span>
+        <div className="properties-row">
+          <button type="button" className="timeline-action" onClick={onGroup}>
+            {t("properties.groupAction")}
+          </button>
+          <button type="button" className="timeline-action" onClick={onUngroup}>
+            {t("properties.ungroupAction")}
+          </button>
+        </div>
+      </div>
     </>
   );
 }
@@ -406,7 +454,22 @@ function AudioProperties({ track, onUpdate }: { track: AudioTrack; onUpdate: Pro
       <Header color="var(--color-audio)" icon={<Music size={13} />} title="Audio" subtitle={track.name} />
 
       <div className="properties-section">
-        <span className="properties-label">Volume</span>
+        <span className="properties-label">{t("properties.trackName")}</span>
+        <input className="properties-input" value={track.name} onChange={(e) => onUpdate({ name: e.target.value })} />
+      </div>
+
+      <div className="properties-section">
+        <div className="properties-row properties-row-header">
+          <span className="properties-label">Volume</span>
+          <button
+            type="button"
+            className={`properties-toggle${track.muted ? " active" : ""}`}
+            onClick={() => onUpdate({ muted: !track.muted })}
+            title={t("properties.mute")}
+          >
+            {track.muted ? t("properties.muted") : t("properties.mute")}
+          </button>
+        </div>
         <input
           type="range"
           min={0}
@@ -425,6 +488,30 @@ function AudioProperties({ track, onUpdate }: { track: AudioTrack; onUpdate: Pro
           step={0.1}
           value={track.audio_offset}
           onChange={(e) => onUpdate({ audio_offset: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.fadeIn")}</span>
+        <input
+          className="properties-input mono"
+          type="number"
+          step={0.1}
+          min={0}
+          value={track.fade_in}
+          onChange={(e) => onUpdate({ fade_in: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.fadeOut")}</span>
+        <input
+          className="properties-input mono"
+          type="number"
+          step={0.1}
+          min={0}
+          value={track.fade_out}
+          onChange={(e) => onUpdate({ fade_out: Number(e.target.value) })}
         />
       </div>
     </>
@@ -644,6 +731,67 @@ function TextProperties({
         onChange={(background_color) => onUpdate({ background_color })}
       />
 
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.letterSpacing")}</span>
+        <input
+          className="properties-input mono"
+          type="number"
+          step={0.1}
+          value={element.letter_spacing ?? 0}
+          onChange={(e) => onUpdate({ letter_spacing: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.lineHeight")}</span>
+        <input
+          className="properties-input mono"
+          type="number"
+          step={0.05}
+          min={0.5}
+          value={element.line_height ?? 1}
+          onChange={(e) => onUpdate({ line_height: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="properties-section">
+        <div className="properties-row properties-row-header">
+          <span className="properties-label">{t("properties.textShadow")}</span>
+          <button
+            type="button"
+            className={`properties-toggle${element.text_shadow ? " active" : ""}`}
+            onClick={() => onUpdate({ text_shadow: element.text_shadow ? null : "rgba(0,0,0,0.6)" })}
+          >
+            {element.text_shadow ? t("properties.backgroundColorOn") : t("properties.backgroundColorOff")}
+          </button>
+        </div>
+        {element.text_shadow && (
+          <ColorPickerField value={element.text_shadow} onChange={(text_shadow) => onUpdate({ text_shadow })} />
+        )}
+      </div>
+
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.textDecoration")}</span>
+        <div className="properties-row">
+          <button
+            type="button"
+            className={`properties-toggle${element.underline ? " active" : ""}`}
+            onClick={() => onUpdate({ underline: !element.underline })}
+          >
+            <span style={{ textDecoration: "underline" }}>U</span>
+          </button>
+          <button
+            type="button"
+            className={`properties-toggle${element.strikethrough ? " active" : ""}`}
+            onClick={() => onUpdate({ strikethrough: !element.strikethrough })}
+          >
+            <span style={{ textDecoration: "line-through" }}>S</span>
+          </button>
+        </div>
+      </div>
+
+      <BlendModeField value={element.blend_mode} onChange={(blend_mode) => onUpdate({ blend_mode })} />
+
       <PositionFields element={element} onUpdate={onUpdate} />
       <AnimationFields element={element} onUpdate={onUpdate} />
     </>
@@ -683,17 +831,42 @@ function MediaProperties({
       </div>
 
       {element.type === "video" && (
-        <div className="properties-section">
-          <span className="properties-label">{t("properties.videoOffset")}</span>
-          <input
-            className="properties-input mono"
-            type="number"
-            step={0.1}
-            min={0}
-            value={element.video_offset}
-            onChange={(e) => onUpdate({ video_offset: Number(e.target.value) })}
-          />
-        </div>
+        <>
+          <div className="properties-section">
+            <span className="properties-label">{t("properties.videoOffset")}</span>
+            <input
+              className="properties-input mono"
+              type="number"
+              step={0.1}
+              min={0}
+              value={element.video_offset}
+              onChange={(e) => onUpdate({ video_offset: Number(e.target.value) })}
+            />
+          </div>
+          <div className="properties-section">
+            <span className="properties-label">{t("properties.volume")}</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={element.volume}
+              onChange={(e) => onUpdate({ volume: Number(e.target.value) })}
+            />
+          </div>
+          <div className="properties-section">
+            <span className="properties-label">{t("properties.playbackSpeed")}</span>
+            <input
+              className="properties-input mono"
+              type="number"
+              step={0.1}
+              min={0.1}
+              max={4}
+              value={element.playback_speed}
+              onChange={(e) => onUpdate({ playback_speed: Number(e.target.value) })}
+            />
+          </div>
+        </>
       )}
 
       <BackgroundColorField
@@ -701,6 +874,52 @@ function MediaProperties({
         onChange={(background_color) => onUpdate({ background_color })}
         defaultColor="rgba(0,0,0,1)"
       />
+
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.cornerRadius")}</span>
+        <input
+          type="range"
+          min={0}
+          max={50}
+          step={1}
+          value={element.corner_radius ?? 0}
+          onChange={(e) => onUpdate({ corner_radius: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="properties-section">
+        <div className="properties-row properties-row-header">
+          <span className="properties-label">{t("properties.border")}</span>
+          <button
+            type="button"
+            className={`properties-toggle${element.border_color ? " active" : ""}`}
+            onClick={() =>
+              onUpdate(
+                element.border_color
+                  ? { border_color: null, border_width: null }
+                  : { border_color: "rgba(255,255,255,1)", border_width: 2 },
+              )
+            }
+          >
+            {element.border_color ? t("properties.backgroundColorOn") : t("properties.backgroundColorOff")}
+          </button>
+        </div>
+        {element.border_color && (
+          <>
+            <ColorPickerField value={element.border_color} onChange={(border_color) => onUpdate({ border_color })} />
+            <input
+              className="properties-input mono"
+              type="number"
+              min={0.5}
+              step={0.5}
+              value={element.border_width ?? 2}
+              onChange={(e) => onUpdate({ border_width: Number(e.target.value) })}
+            />
+          </>
+        )}
+      </div>
+
+      <BlendModeField value={element.blend_mode} onChange={(blend_mode) => onUpdate({ blend_mode })} />
 
       <ImagePanFields element={element} onUpdate={onUpdate} />
       <PositionFields element={element} onUpdate={onUpdate} />
@@ -748,9 +967,27 @@ function ShapeProperties({
           >
             S
           </button>
+          <button
+            type="button"
+            className={`properties-toggle${element.stroke_dash ? " active" : ""}`}
+            onClick={() => onUpdate({ stroke_dash: element.stroke_dash ? null : 6 })}
+            title={t("properties.strokeDash")}
+          >
+            ┄
+          </button>
         </div>
         {element.stroke !== "none" && (
           <ColorPickerField value={element.stroke} onChange={(stroke) => onUpdate({ stroke })} />
+        )}
+        {element.stroke_dash !== null && (
+          <input
+            type="range"
+            min={1}
+            max={30}
+            step={1}
+            value={element.stroke_dash ?? 6}
+            onChange={(e) => onUpdate({ stroke_dash: Number(e.target.value) })}
+          />
         )}
       </div>
 
@@ -767,6 +1004,40 @@ function ShapeProperties({
           />
         </div>
       )}
+
+      <div className="properties-section">
+        <div className="properties-row properties-row-header">
+          <span className="properties-label">{t("properties.gradient")}</span>
+          <button
+            type="button"
+            className={`properties-toggle${element.gradient_to ? " active" : ""}`}
+            onClick={() =>
+              onUpdate(
+                element.gradient_to
+                  ? { gradient_to: null, gradient_angle: null }
+                  : { gradient_to: "rgba(255,255,255,1)", gradient_angle: 0 },
+              )
+            }
+          >
+            {element.gradient_to ? t("properties.backgroundColorOn") : t("properties.backgroundColorOff")}
+          </button>
+        </div>
+        {element.gradient_to && (
+          <>
+            <ColorPickerField value={element.gradient_to} onChange={(gradient_to) => onUpdate({ gradient_to })} />
+            <input
+              type="range"
+              min={0}
+              max={360}
+              step={5}
+              value={element.gradient_angle ?? 0}
+              onChange={(e) => onUpdate({ gradient_angle: Number(e.target.value) })}
+            />
+          </>
+        )}
+      </div>
+
+      <BlendModeField value={element.blend_mode} onChange={(blend_mode) => onUpdate({ blend_mode })} />
 
       <PositionFields element={element} onUpdate={onUpdate} />
       <AnimationFields element={element} onUpdate={onUpdate} />
@@ -787,6 +1058,8 @@ export default function PropertiesPanel({
   onDeleteLayer,
   onAlign,
   onDistribute,
+  onGroup,
+  onUngroup,
 }: Props) {
   const { t } = useTranslation();
   const layers = (
@@ -814,7 +1087,13 @@ export default function PropertiesPanel({
     return (
       <aside className="editor-properties">
         <div className="properties-content">
-          <MultiSelectionProperties count={selectedIds.length} onAlign={onAlign} onDistribute={onDistribute} />
+          <MultiSelectionProperties
+            count={selectedIds.length}
+            onAlign={onAlign}
+            onDistribute={onDistribute}
+            onGroup={onGroup}
+            onUngroup={onUngroup}
+          />
           {layers}
         </div>
       </aside>

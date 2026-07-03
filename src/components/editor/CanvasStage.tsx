@@ -102,6 +102,17 @@ function TextElementView({ element }: { element: Extract<Element, { type: "text"
         fontFamily: element.font_family ?? undefined,
         fontWeight: element.font_weight === "bold" ? 800 : 500,
         fontStyle: element.font_style ?? undefined,
+        letterSpacing: element.letter_spacing ? `${element.letter_spacing}cqw` : undefined,
+        lineHeight: element.line_height ?? undefined,
+        textShadow: element.text_shadow ? `2px 2px 4px ${element.text_shadow}` : undefined,
+        textDecoration:
+          element.underline && element.strikethrough
+            ? "underline line-through"
+            : element.underline
+              ? "underline"
+              : element.strikethrough
+                ? "line-through"
+                : undefined,
         padding: "0 4px",
         pointerEvents: "none",
         whiteSpace: "pre-wrap",
@@ -124,7 +135,16 @@ function ImageElementView({
 }) {
   const objectFit = element.fit_mode === "stretch" ? "fill" : element.fit_mode === "cover" ? "cover" : "contain";
   return (
-    <div style={{ width: "100%", height: "100%", overflow: "hidden" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        borderRadius: element.corner_radius ? `${element.corner_radius}px` : undefined,
+        border: element.border_color ? `${element.border_width ?? 2}px solid ${element.border_color}` : undefined,
+        boxSizing: "border-box",
+      }}
+    >
       <img
         src={assetUrl(projectDir, element.src)}
         alt={element.name}
@@ -160,16 +180,27 @@ function VideoElementView({
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
-    const targetTime = Math.max(0, localTime - element.start_time) + element.video_offset;
+    const speed = element.playback_speed > 0.01 ? element.playback_speed : 1;
+    const targetTime = Math.max(0, localTime - element.start_time) * speed + element.video_offset;
     if (Math.abs(video.currentTime - targetTime) > 0.25) {
       video.currentTime = targetTime;
     }
+    video.playbackRate = speed;
     if (playing) video.play().catch(() => {});
     else video.pause();
-  }, [localTime, playing, element.start_time, element.video_offset]);
+  }, [localTime, playing, element.start_time, element.video_offset, element.playback_speed]);
 
   return (
-    <div style={{ width: "100%", height: "100%", overflow: "hidden" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        borderRadius: element.corner_radius ? `${element.corner_radius}px` : undefined,
+        border: element.border_color ? `${element.border_width ?? 2}px solid ${element.border_color}` : undefined,
+        boxSizing: "border-box",
+      }}
+    >
       <video
         ref={ref}
         src={assetUrl(projectDir, element.src)}
@@ -404,6 +435,7 @@ export default function CanvasStage({
                         opacity: css.opacity,
                         transform: css.transform || undefined,
                         filter: css.filter || undefined,
+                        mixBlendMode: el.blend_mode ?? undefined,
                       }}
                     >
                       {el.type === "text" && <TextElementView element={el} />}

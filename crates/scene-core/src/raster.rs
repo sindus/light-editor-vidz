@@ -89,6 +89,17 @@ fn parse_css_color(s: &str) -> Color {
     Color::WHITE
 }
 
+fn to_skia_blend_mode(mode: Option<crate::model::BlendMode>) -> tiny_skia::BlendMode {
+    match mode {
+        None | Some(crate::model::BlendMode::Normal) => tiny_skia::BlendMode::SourceOver,
+        Some(crate::model::BlendMode::Multiply) => tiny_skia::BlendMode::Multiply,
+        Some(crate::model::BlendMode::Screen) => tiny_skia::BlendMode::Screen,
+        Some(crate::model::BlendMode::Overlay) => tiny_skia::BlendMode::Overlay,
+        Some(crate::model::BlendMode::Darken) => tiny_skia::BlendMode::Darken,
+        Some(crate::model::BlendMode::Lighten) => tiny_skia::BlendMode::Lighten,
+    }
+}
+
 fn elem_transform(anim: &ResolvedTransform, cx: f32, cy: f32, w_px: f32, h_px: f32) -> Transform {
     let dx_px = (anim.dx_pct / 100.0) as f32 * w_px;
     let dy_px = (anim.dy_pct / 100.0) as f32 * h_px;
@@ -307,6 +318,7 @@ impl FrameRenderer {
                         anim.opacity as f32,
                         anim.blur_px as f32,
                         transform,
+                        base.blend_mode,
                     );
                 }
                 Element::Shape(shape_el) => {
@@ -320,6 +332,7 @@ impl FrameRenderer {
                         anim.opacity as f32,
                         anim.blur_px as f32,
                         transform,
+                        base.blend_mode,
                     );
                 }
                 Element::Image(img_el) => {
@@ -341,6 +354,10 @@ impl FrameRenderer {
                             anim.blur_px as f32,
                             transform,
                             pan,
+                            base.blend_mode,
+                            img_el.corner_radius,
+                            img_el.border_color.as_deref(),
+                            img_el.border_width,
                         );
                     }
                 }
@@ -350,7 +367,13 @@ impl FrameRenderer {
                         local_element_time,
                         active_duration,
                     );
-                    let local_video_time = local_element_time.max(0.0) + video_el.video_offset;
+                    let speed = if video_el.playback_speed > 0.01 {
+                        video_el.playback_speed
+                    } else {
+                        1.0
+                    };
+                    let local_video_time =
+                        local_element_time.max(0.0) * speed + video_el.video_offset;
                     let frame_path =
                         self.video_frame_at(project_dir, &video_el.src, fps, local_video_time);
                     let frame = frame_path.and_then(|p| {
@@ -370,6 +393,10 @@ impl FrameRenderer {
                             anim.blur_px as f32,
                             transform,
                             pan,
+                            base.blend_mode,
+                            video_el.corner_radius,
+                            video_el.border_color.as_deref(),
+                            video_el.border_width,
                         );
                     } else {
                         // Repli si ffmpeg est indisponible ou l'extraction a échoué.
@@ -406,6 +433,7 @@ impl FrameRenderer {
         opacity: f32,
         blur_px: f32,
         transform: Transform,
+        blend_mode: Option<crate::model::BlendMode>,
     ) {
         let layer_w = w_px.ceil().max(1.0) as u32;
         let layer_h = h_px.ceil().max(1.0) as u32;
@@ -414,7 +442,8 @@ impl FrameRenderer {
         };
 
         let font_size_px = (text_el.font_size.unwrap_or(4.0) / 100.0) as f32 * scene.width() as f32;
-        let metrics = Metrics::new(font_size_px, font_size_px * 1.25);
+        let line_height_px = font_size_px * 1.25 * text_el.line_height.unwrap_or(1.0) as f32;
+        let metrics = Metrics::new(font_size_px, line_height_px);
         let mut buffer = Buffer::new(&mut self.font_system, metrics);
         buffer.set_size(Some(w_px), Some(h_px));
 
@@ -440,17 +469,72 @@ impl FrameRenderer {
             (color.alpha() * 255.0) as u8,
         );
 
+        let letter_spacing_px =
+            (text_el.letter_spacing.unwrap_or(0.0) / 100.0) as f32 * scene.width() as f32;
+
         // Décalage vertical (alignement) approximatif : on ne gère que top/middle/bottom simplement.
-        let total_text_height = buffer.layout_runs().count() as f32 * font_size_px * 1.25;
+        let total_text_height = buffer.layout_runs().count() as f32 * line_height_px;
         let v_offset = match text_el.vertical_alignment {
             crate::model::VerticalAlign::Top => 0.0,
             crate::model::VerticalAlign::Bottom => (h_px - total_text_height).max(0.0),
             crate::model::VerticalAlign::Middle => ((h_px - total_text_height) / 2.0).max(0.0),
         };
 
+        // Ombre portée : dessinée en premier pour rester derrière le texte principal.
+        if let Some(shadow_color) = text_el.text_shadow.as_deref() {
+            let shadow = parse_css_color(shadow_color);
+            let shadow_cosmic = CosmicColor::rgba(
+                (shadow.red() * 255.0) as u8,
+                (shadow.green() * 255.0) as u8,
+                (shadow.blue() * 255.0) as u8,
+                (shadow.alpha() * 255.0) as u8,
+            );
+            let offset = (font_size_px * 0.06).max(1.0);
+            for run in buffer.layout_runs() {
+                let mut cumulative_spacing = 0.0f32;
+                for glyph in run.glyphs {
+                    let physical = glyph.physical(
+                        (cumulative_spacing + offset, v_offset + run.line_y + offset),
+                        1.0,
+                    );
+                    cumulative_spacing += letter_spacing_px;
+                    self.swash_cache.with_pixels(
+                        &mut self.font_system,
+                        physical.cache_key,
+                        shadow_cosmic,
+                        |gx, gy, gcolor| {
+                            let ix = physical.x + gx;
+                            let iy = physical.y + gy;
+                            if ix < 0 || iy < 0 || ix >= layer_w as i32 || iy >= layer_h as i32 {
+                                return;
+                            }
+                            blend_pixel(
+                                &mut layer,
+                                ix as u32,
+                                iy as u32,
+                                gcolor.r(),
+                                gcolor.g(),
+                                gcolor.b(),
+                                gcolor.a(),
+                            );
+                        },
+                    );
+                }
+            }
+        }
+
+        // Texte principal ; on garde au passage les bornes de chaque ligne pour le
+        // souligné/barré (dessinés après, une fois toutes les lignes connues).
+        let mut line_bounds: Vec<(f32, f32, f32)> = Vec::new();
         for run in buffer.layout_runs() {
+            let mut cumulative_spacing = 0.0f32;
+            let mut min_x = f32::MAX;
+            let mut max_x = f32::MIN;
             for glyph in run.glyphs {
-                let physical = glyph.physical((0.0, v_offset + run.line_y), 1.0);
+                let physical = glyph.physical((cumulative_spacing, v_offset + run.line_y), 1.0);
+                cumulative_spacing += letter_spacing_px;
+                min_x = min_x.min(physical.x as f32);
+                max_x = max_x.max(physical.x as f32 + glyph.w);
                 self.swash_cache.with_pixels(
                     &mut self.font_system,
                     physical.cache_key,
@@ -473,6 +557,37 @@ impl FrameRenderer {
                     },
                 );
             }
+            if min_x <= max_x {
+                line_bounds.push((v_offset + run.line_y, min_x, max_x));
+            }
+        }
+
+        if text_el.underline || text_el.strikethrough {
+            let mut line_paint = Paint::default();
+            line_paint.set_color(color);
+            let thickness = (font_size_px * 0.06).max(1.0);
+            for (line_y, min_x, max_x) in &line_bounds {
+                if text_el.underline {
+                    if let Some(rect) = Rect::from_xywh(
+                        *min_x,
+                        line_y + font_size_px * 0.18,
+                        max_x - min_x,
+                        thickness,
+                    ) {
+                        layer.fill_rect(rect, &line_paint, Transform::identity(), None);
+                    }
+                }
+                if text_el.strikethrough {
+                    if let Some(rect) = Rect::from_xywh(
+                        *min_x,
+                        line_y - font_size_px * 0.32,
+                        max_x - min_x,
+                        thickness,
+                    ) {
+                        layer.fill_rect(rect, &line_paint, Transform::identity(), None);
+                    }
+                }
+            }
         }
 
         if blur_px > 0.5 {
@@ -486,6 +601,7 @@ impl FrameRenderer {
             layer.as_ref(),
             &PixmapPaint {
                 opacity,
+                blend_mode: to_skia_blend_mode(blend_mode),
                 ..Default::default()
             },
             layer_transform,
@@ -672,6 +788,7 @@ fn draw_shape(
     opacity: f32,
     blur_px: f32,
     transform: Transform,
+    blend_mode: Option<crate::model::BlendMode>,
 ) {
     let layer_w = w.ceil().max(1.0) as u32;
     let layer_h = h.ceil().max(1.0) as u32;
@@ -688,9 +805,32 @@ fn draw_shape(
     ) else {
         return;
     };
-    let mut paint = Paint::default();
-    paint.set_color(parse_css_color(&shape_el.fill));
-    paint.anti_alias = true;
+    let mut paint = Paint {
+        anti_alias: true,
+        ..Default::default()
+    };
+    if let Some(gradient_to) = shape_el.gradient_to.as_deref() {
+        let angle_rad = (shape_el.gradient_angle.unwrap_or(0.0) as f32).to_radians();
+        let (dx, dy) = (angle_rad.cos(), angle_rad.sin());
+        let (cx, cy) = (w / 2.0, h / 2.0);
+        let half_len = (w.abs() * dx.abs() + h.abs() * dy.abs()) / 2.0;
+        if let Some(shader) = tiny_skia::LinearGradient::new(
+            tiny_skia::Point::from_xy(cx - dx * half_len, cy - dy * half_len),
+            tiny_skia::Point::from_xy(cx + dx * half_len, cy + dy * half_len),
+            vec![
+                tiny_skia::GradientStop::new(0.0, parse_css_color(&shape_el.fill)),
+                tiny_skia::GradientStop::new(1.0, parse_css_color(gradient_to)),
+            ],
+            tiny_skia::SpreadMode::Pad,
+            Transform::identity(),
+        ) {
+            paint.shader = shader;
+        } else {
+            paint.set_color(parse_css_color(&shape_el.fill));
+        }
+    } else {
+        paint.set_color(parse_css_color(&shape_el.fill));
+    }
     layer.fill_path(
         &path,
         &paint,
@@ -703,8 +843,13 @@ fn draw_shape(
         let mut stroke_paint = Paint::default();
         stroke_paint.set_color(parse_css_color(&shape_el.stroke));
         stroke_paint.anti_alias = true;
+        let dash = shape_el
+            .stroke_dash
+            .filter(|d| *d > 0.5)
+            .and_then(|d| tiny_skia::StrokeDash::new(vec![d as f32, d as f32], 0.0));
         let stroke = tiny_skia::Stroke {
             width: shape_el.stroke_width as f32,
+            dash,
             ..Default::default()
         };
         layer.stroke_path(&path, &stroke_paint, &stroke, Transform::identity(), None);
@@ -721,6 +866,7 @@ fn draw_shape(
         layer.as_ref(),
         &PixmapPaint {
             opacity,
+            blend_mode: to_skia_blend_mode(blend_mode),
             ..Default::default()
         },
         layer_transform,
@@ -741,6 +887,10 @@ fn draw_bitmap(
     blur_px: f32,
     transform: Transform,
     pan: (f64, f64, f64),
+    blend_mode: Option<crate::model::BlendMode>,
+    corner_radius: Option<f64>,
+    border_color: Option<&str>,
+    border_width: Option<f64>,
 ) {
     let Some(mut src) = Pixmap::from_vec(
         img.as_raw().clone(),
@@ -789,17 +939,52 @@ fn draw_bitmap(
         .pre_translate(offset_x, offset_y)
         .pre_scale(scale_x * pan_scale as f32, scale_y * pan_scale as f32);
 
+    // Le masque d'angles arrondis et la bordure sont construits dans l'espace canvas (avant
+    // mise à l'échelle de l'image source), puis transformés par `transform` (rotation/anim de
+    // l'élément) afin de rester alignés avec la boîte de destination (x, y, w, h).
+    let radius = corner_radius.unwrap_or(0.0) as f32;
+    let clip_path = if radius > 0.5 {
+        shape_path(ShapeType::Rectangle, x, y, w, h, radius)
+    } else {
+        None
+    };
+    let mask = clip_path.as_ref().and_then(|path| {
+        let mut m = Mask::new(scene.width(), scene.height())?;
+        m.fill_path(path, FillRule::Winding, true, transform);
+        Some(m)
+    });
+
     scene.draw_pixmap(
         0,
         0,
         src.as_ref(),
         &PixmapPaint {
             opacity,
+            blend_mode: to_skia_blend_mode(blend_mode),
             ..Default::default()
         },
         img_transform,
-        None,
+        mask.as_ref(),
     );
+
+    if let (Some(color), Some(width)) = (border_color, border_width) {
+        if width > 0.01 {
+            let border_path =
+                clip_path.or_else(|| shape_path(ShapeType::Rectangle, x, y, w, h, 0.0));
+            if let Some(path) = border_path {
+                let mut paint = Paint::default();
+                let mut c = parse_css_color(color);
+                c.set_alpha(c.alpha() * opacity);
+                paint.set_color(c);
+                paint.anti_alias = true;
+                let stroke = tiny_skia::Stroke {
+                    width: width as f32,
+                    ..Default::default()
+                };
+                scene.stroke_path(&path, &paint, &stroke, transform, None);
+            }
+        }
+    }
 }
 
 fn premultiply(pixmap: &mut Pixmap) {
@@ -872,12 +1057,17 @@ mod tests {
                             height: 20.0,
                             rotation: 0.0,
                             animations: vec![],
+                            group_id: None,
+                            blend_mode: None,
                         },
                         shape_type: ShapeType::Rectangle,
                         fill: "rgba(255,0,0,1)".into(),
                         stroke: "none".into(),
                         stroke_width: 0.0,
                         border_radius: None,
+                        stroke_dash: None,
+                        gradient_to: None,
+                        gradient_angle: None,
                     }),
                     Element::Text(TextElement {
                         base: ElementBase {
@@ -897,6 +1087,8 @@ mod tests {
                                 easing: Easing::Linear,
                                 with_fade: true,
                             }],
+                            group_id: None,
+                            blend_mode: None,
                         },
                         content: "Bonjour".into(),
                         alignment: TextAlign::Left,
@@ -907,6 +1099,11 @@ mod tests {
                         font_family: None,
                         font_weight: None,
                         font_style: None,
+                        letter_spacing: None,
+                        line_height: None,
+                        text_shadow: None,
+                        underline: false,
+                        strikethrough: false,
                     }),
                 ],
                 transition_in: None,
@@ -1045,12 +1242,17 @@ mod tests {
                 height: 100.0,
                 rotation: 0.0,
                 animations: vec![],
+                group_id: None,
+                blend_mode: None,
             },
             shape_type: ShapeType::Rectangle,
             fill: "rgba(255,0,0,1)".into(),
             stroke: "none".into(),
             stroke_width: 0.0,
             border_radius: Some(15.0),
+            stroke_dash: None,
+            gradient_to: None,
+            gradient_angle: None,
         };
 
         let mut sharp = Pixmap::new(40, 40).unwrap();
@@ -1064,6 +1266,7 @@ mod tests {
             1.0,
             0.0,
             Transform::identity(),
+            None,
         );
         let mut blurred = Pixmap::new(40, 40).unwrap();
         draw_shape(
@@ -1076,6 +1279,7 @@ mod tests {
             1.0,
             20.0,
             Transform::identity(),
+            None,
         );
 
         // Coin du rectangle arrondi : transparent sans flou, partiellement coloré une fois
@@ -1089,6 +1293,136 @@ mod tests {
         assert!(
             blurred_corner > 0,
             "avec flou, le coin doit être partiellement coloré, alpha={blurred_corner}"
+        );
+    }
+
+    fn sample_shape_el(overrides: impl FnOnce(ShapeElement) -> ShapeElement) -> ShapeElement {
+        overrides(ShapeElement {
+            base: ElementBase {
+                id: "s1".into(),
+                name: "Rect".into(),
+                start_time: 0.0,
+                duration: None,
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+                rotation: 0.0,
+                animations: vec![],
+                group_id: None,
+                blend_mode: None,
+            },
+            shape_type: ShapeType::Rectangle,
+            fill: "rgba(255,0,0,1)".into(),
+            stroke: "none".into(),
+            stroke_width: 0.0,
+            border_radius: None,
+            stroke_dash: None,
+            gradient_to: None,
+            gradient_angle: None,
+        })
+    }
+
+    #[test]
+    fn gradient_fill_differs_from_left_to_right() {
+        let shape_el = sample_shape_el(|el| ShapeElement {
+            gradient_to: Some("rgba(0,0,255,1)".into()),
+            gradient_angle: Some(0.0),
+            ..el
+        });
+        let mut pixmap = Pixmap::new(40, 40).unwrap();
+        draw_shape(
+            &mut pixmap,
+            &shape_el,
+            0.0,
+            0.0,
+            40.0,
+            40.0,
+            1.0,
+            0.0,
+            Transform::identity(),
+            None,
+        );
+        let left = pixmap.pixel(2, 20).unwrap();
+        let right = pixmap.pixel(37, 20).unwrap();
+        assert!(
+            left.red() > right.red() && left.blue() < right.blue(),
+            "le dégradé doit passer du rouge (gauche) au bleu (droite)"
+        );
+    }
+
+    #[test]
+    fn dashed_stroke_leaves_gaps_along_the_edge() {
+        let shape_el = sample_shape_el(|el| ShapeElement {
+            fill: "rgba(0,0,0,0)".into(),
+            stroke: "rgba(255,255,255,1)".into(),
+            stroke_width: 3.0,
+            stroke_dash: Some(4.0),
+            ..el
+        });
+        // Boîte avec marge (5,5,30,30) dans un canvas 40x40, pour que le bord supérieur du
+        // contour (centré sur y=5) reste entièrement dans les limites du pixmap.
+        let mut pixmap = Pixmap::new(40, 40).unwrap();
+        draw_shape(
+            &mut pixmap,
+            &shape_el,
+            5.0,
+            5.0,
+            30.0,
+            30.0,
+            1.0,
+            0.0,
+            Transform::identity(),
+            None,
+        );
+        // Le long du bord supérieur, un trait tireté doit alterner présence/absence de contour.
+        let alphas: Vec<u8> = (5..35)
+            .map(|x| pixmap.pixel(x, 5).unwrap().alpha())
+            .collect();
+        let has_covered = alphas.iter().any(|a| *a > 200);
+        let has_gap = alphas.iter().any(|a| *a < 50);
+        assert!(
+            has_covered,
+            "le contour tireté doit couvrir certaines zones"
+        );
+        assert!(
+            has_gap,
+            "le contour tireté doit laisser des espaces le long du bord, alphas={alphas:?}"
+        );
+    }
+
+    #[test]
+    fn bitmap_corner_radius_masks_the_corner() {
+        let img = image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]));
+        let mut pixmap = Pixmap::new(40, 40).unwrap();
+        draw_bitmap(
+            &mut pixmap,
+            &img,
+            FitMode::Stretch,
+            0.0,
+            0.0,
+            40.0,
+            40.0,
+            1.0,
+            0.0,
+            Transform::identity(),
+            (1.0, 0.0, 0.0),
+            None,
+            Some(15.0),
+            None,
+            None,
+        );
+        let corner = pixmap.pixel(1, 1).unwrap();
+        let center = pixmap.pixel(20, 20).unwrap();
+        assert_eq!(
+            corner.alpha(),
+            0,
+            "le coin doit être masqué par le rayon d'angle"
+        );
+        assert_eq!(
+            center.alpha(),
+            255,
+            "le centre de l'image doit rester opaque"
         );
     }
 
@@ -1176,12 +1510,19 @@ mod tests {
                         height: 100.0,
                         rotation: 0.0,
                         animations: vec![],
+                        group_id: None,
+                        blend_mode: None,
                     },
                     src: "video.mp4".into(),
                     fit_mode: FitMode::Cover,
                     background_color: None,
                     image_pan: None,
                     video_offset: 0.0,
+                    corner_radius: None,
+                    border_color: None,
+                    border_width: None,
+                    volume: 1.0,
+                    playback_speed: 1.0,
                 })],
                 transition_in: None,
                 transition_out: None,

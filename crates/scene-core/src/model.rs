@@ -55,6 +55,12 @@ pub struct ElementBase {
     pub height: f64,
     pub rotation: f64,
     pub animations: Vec<Animation>,
+    /// Identifiant partagé par tous les éléments d'un même groupe (None = pas groupé).
+    /// Sélectionner/déplacer un élément groupé agit sur tout le groupe (logique frontend
+    /// uniquement, ne change rien au rendu).
+    pub group_id: Option<String>,
+    /// None = mode de fusion normal (source-over).
+    pub blend_mode: Option<BlendMode>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -83,6 +89,14 @@ pub struct TextElement {
     pub font_family: Option<String>,
     pub font_weight: Option<FontWeight>,
     pub font_style: Option<FontStyle>,
+    /// Exprimé en `cqw` (même unité que `font_size`), peut être négatif.
+    pub letter_spacing: Option<f64>,
+    /// Multiplicateur de la hauteur de ligne par défaut (1.0 = valeur actuelle du moteur).
+    pub line_height: Option<f64>,
+    /// Couleur (rgba) de l'ombre portée du texte, décalage fixe non configurable.
+    pub text_shadow: Option<String>,
+    pub underline: bool,
+    pub strikethrough: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -94,6 +108,9 @@ pub struct ImageElement {
     pub fit_mode: FitMode,
     pub background_color: Option<String>,
     pub image_pan: Option<ImagePan>,
+    pub corner_radius: Option<f64>,
+    pub border_color: Option<String>,
+    pub border_width: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -107,6 +124,13 @@ pub struct VideoElement {
     pub image_pan: Option<ImagePan>,
     /// Point d'entrée (secondes) dans le fichier source.
     pub video_offset: f64,
+    pub corner_radius: Option<f64>,
+    pub border_color: Option<String>,
+    pub border_width: Option<f64>,
+    /// 0.0 à 1.0, indépendant du volume global des pistes audio.
+    pub volume: f64,
+    /// 1.0 = vitesse normale.
+    pub playback_speed: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -119,6 +143,12 @@ pub struct ShapeElement {
     pub stroke: String,
     pub stroke_width: f64,
     pub border_radius: Option<f64>,
+    /// Longueur (px logiques) des tirets ; None = trait plein.
+    pub stroke_dash: Option<f64>,
+    /// Seconde couleur : si présente, `fill` devient un dégradé linéaire vers `gradient_to`.
+    pub gradient_to: Option<String>,
+    /// Degrés, 0 = gauche→droite. Ignoré si `gradient_to` est None.
+    pub gradient_angle: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -131,6 +161,23 @@ pub struct AudioTrack {
     pub duration: Option<f64>,
     pub volume: f64,
     pub audio_offset: f64,
+    /// Durée (secondes) du fondu d'entrée.
+    pub fade_in: f64,
+    /// Durée (secondes) du fondu de sortie.
+    pub fade_out: f64,
+    pub muted: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "kebab-case")]
+pub enum BlendMode {
+    Normal,
+    Multiply,
+    Screen,
+    Overlay,
+    Darken,
+    Lighten,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

@@ -180,6 +180,8 @@ function convertElement(raw: unknown, canvasWidth: number, canvasHeight: number)
     height: geo.height,
     rotation: el.rotation != null ? Number(el.rotation) : 0,
     animations: convertAnimations(el.animations),
+    group_id: null,
+    blend_mode: null,
   };
 
   if (type === "text") {
@@ -197,6 +199,11 @@ function convertElement(raw: unknown, canvasWidth: number, canvasHeight: number)
       font_family: typeof el.fontFamily === "string" ? el.fontFamily : null,
       font_weight: el.fontWeight === "bold" ? "bold" : "normal",
       font_style: el.fontStyle === "italic" ? "italic" : "normal",
+      letter_spacing: null,
+      line_height: null,
+      text_shadow: null,
+      underline: false,
+      strikethrough: false,
     };
   }
 
@@ -215,6 +222,9 @@ function convertElement(raw: unknown, canvasWidth: number, canvasHeight: number)
       fit_mode: fitMode,
       background_color: typeof el.backgroundColor === "string" ? el.backgroundColor : null,
       image_pan: imagePan,
+      corner_radius: null,
+      border_color: null,
+      border_width: null,
     };
   }
 
@@ -227,6 +237,11 @@ function convertElement(raw: unknown, canvasWidth: number, canvasHeight: number)
       background_color: typeof el.backgroundColor === "string" ? el.backgroundColor : null,
       image_pan: imagePan,
       video_offset: Number(el.videoOffset) || 0,
+      corner_radius: null,
+      border_color: null,
+      border_width: null,
+      volume: 1,
+      playback_speed: 1,
     };
   }
 
@@ -239,6 +254,9 @@ function convertElement(raw: unknown, canvasWidth: number, canvasHeight: number)
     stroke: typeof el.stroke === "string" ? el.stroke : "none",
     stroke_width: el.strokeWidth != null ? Number(el.strokeWidth) : 3,
     border_radius: el.borderRadius != null ? Number(el.borderRadius) : null,
+    stroke_dash: null,
+    gradient_to: null,
+    gradient_angle: null,
   };
 }
 
@@ -279,6 +297,9 @@ function convertAudioTrack(raw: unknown): AudioTrack | null {
     duration: t.duration != null ? Number(t.duration) : null,
     volume: t.volume != null ? Math.max(0, Math.min(1, Number(t.volume))) : 1,
     audio_offset: Number(t.audioOffset) || 0,
+    fade_in: 0,
+    fade_out: 0,
+    muted: false,
   };
 }
 

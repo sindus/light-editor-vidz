@@ -10,6 +10,9 @@ export function createAudioTrack(relativeSrc: string, name: string): AudioTrack 
     duration: null,
     volume: 1,
     audio_offset: 0,
+    fade_in: 0,
+    fade_out: 0,
+    muted: false,
   };
 }
 
