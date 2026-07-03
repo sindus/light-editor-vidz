@@ -164,3 +164,30 @@ pub fn list_recent_projects(app: tauri::AppHandle) -> Result<Vec<RecentProject>,
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slugify_lowercases_and_replaces_non_alphanumeric_with_dashes() {
+        assert_eq!(slugify("My Cool Project"), "my-cool-project");
+    }
+
+    #[test]
+    fn slugify_trims_leading_and_trailing_dashes() {
+        assert_eq!(slugify("  --Hello World!!--  "), "hello-world");
+    }
+
+    #[test]
+    fn slugify_falls_back_to_projet_when_nothing_alphanumeric_remains() {
+        assert_eq!(slugify("!!!"), "projet");
+        assert_eq!(slugify(""), "projet");
+        assert_eq!(slugify("   "), "projet");
+    }
+
+    #[test]
+    fn slugify_preserves_unicode_letters() {
+        assert_eq!(slugify("Ma Vidéo Été"), "ma-vidéo-été");
+    }
+}

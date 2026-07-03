@@ -100,3 +100,59 @@ pub fn list_assets(project_dir: String, kind: String) -> Result<Vec<AssetInfo>, 
     assets.sort_by(|a, b| a.filename.cmp(&b.filename));
     Ok(assets)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kind_subdir_maps_known_kinds() {
+        assert_eq!(kind_subdir("image"), Ok("images"));
+        assert_eq!(kind_subdir("video"), Ok("videos"));
+        assert_eq!(kind_subdir("audio"), Ok("audio"));
+    }
+
+    #[test]
+    fn kind_subdir_rejects_an_unknown_kind() {
+        assert!(kind_subdir("subtitle").is_err());
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "letest-assets-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn unique_destination_returns_the_plain_name_when_free() {
+        let dir = temp_dir("free");
+        assert_eq!(unique_destination(&dir, "logo.png"), dir.join("logo.png"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unique_destination_suffixes_on_collision_and_preserves_the_extension() {
+        let dir = temp_dir("collision");
+        fs::write(dir.join("logo.png"), b"a").unwrap();
+        assert_eq!(unique_destination(&dir, "logo.png"), dir.join("logo-2.png"));
+
+        fs::write(dir.join("logo-2.png"), b"b").unwrap();
+        assert_eq!(unique_destination(&dir, "logo.png"), dir.join("logo-3.png"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unique_destination_handles_a_filename_without_extension() {
+        let dir = temp_dir("noext");
+        fs::write(dir.join("README"), b"a").unwrap();
+        assert_eq!(unique_destination(&dir, "README"), dir.join("README-2"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+}

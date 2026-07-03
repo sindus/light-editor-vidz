@@ -144,6 +144,29 @@
   margin: 4px 2px;
 }
 
+.app-menu-shortcuts {
+  padding: 8px 9px 4px;
+  min-width: 210px;
+}
+
+.app-menu-shortcuts-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+
+.app-menu-shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
 .app-menu-about {
   padding: 10px 9px 6px;
   min-width: 180px;
@@ -1240,6 +1263,24 @@
 .timeline-scene-name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.timeline-scene-name-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 3px;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  padding: 0 2px;
+}
+
+.timeline-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-field-soft);
+  margin: 0 2px;
 }
 
 .timeline-scene-resize {

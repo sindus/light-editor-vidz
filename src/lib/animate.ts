@@ -6,9 +6,11 @@ import type { TransitionType } from "../bindings/TransitionType";
 import type { ImagePan } from "../bindings/ImagePan";
 
 /**
- * Résolution d'animation — port TS temporaire (même limitation que `timeline.ts` :
- * à terme cette logique doit vivre une seule fois dans `scene-core` et être partagée
- * via wasm avec l'export natif, voir Phase 7 du plan).
+ * Résolution d'animation — port TS assumé de `scene_core::animate` (Rust), pour la preview
+ * temps réel. Duplication volontaire, pas de pont wasm sur ce chemin chaud (appelé à chaque
+ * frame pour chaque élément) : voir la doc de `crates/scene-core/src/animate.rs` pour le
+ * raisonnement. Les deux implémentations sont validées l'une contre l'autre par
+ * `animateGolden.test.ts` (fixture partagée `fixtures/animation-golden.json`).
  *
  * Contrairement à l'ancien projet, plusieurs animations sur un même élément se
  * COMPOSENT (translation additive, échelle multiplicative) au lieu que la dernière

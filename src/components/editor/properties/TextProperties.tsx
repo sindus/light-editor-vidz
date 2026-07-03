@@ -55,9 +55,19 @@ export function TextProperties({
             className="properties-input mono"
             type="number"
             step={0.1}
-            value={element.font_size ?? 0}
+            disabled={element.font_size === null}
+            placeholder={element.font_size === null ? t("properties.fontSizeAuto") : undefined}
+            value={element.font_size ?? ""}
             onChange={(e) => onUpdate({ font_size: Number(e.target.value) })}
           />
+          <button
+            type="button"
+            className={`properties-toggle${element.font_size === null ? " active" : ""}`}
+            onClick={() => onUpdate({ font_size: element.font_size === null ? 5 : null })}
+            title={t("properties.fontSizeAutoToggle")}
+          >
+            {t("properties.fontSizeAuto")}
+          </button>
           <button
             type="button"
             className={`properties-toggle${element.font_weight === "bold" ? " active" : ""}`}

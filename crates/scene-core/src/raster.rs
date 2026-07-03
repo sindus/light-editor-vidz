@@ -168,7 +168,8 @@ impl FrameRenderer {
     }
 
     fn load_image(&mut self, project_dir: &Path, relative_src: &str) -> Option<&image::RgbaImage> {
-        self.load_image_abs(relative_src.to_string(), project_dir.join(relative_src))
+        let path = crate::paths::resolve_media_path(project_dir, relative_src).ok()?;
+        self.load_image_abs(relative_src.to_string(), path)
     }
 
     /// Frame extraite la plus proche de `local_time` (secondes) pour cette source vidéo.
@@ -182,8 +183,9 @@ impl FrameRenderer {
         local_time: f64,
     ) -> Option<PathBuf> {
         if !self.video_frames.contains_key(relative_src) {
-            let source = project_dir.join(relative_src);
-            let result = extract_video_frames(&source, fps, &self.scratch_dir).ok();
+            let result = crate::paths::resolve_media_path(project_dir, relative_src)
+                .ok()
+                .and_then(|source| extract_video_frames(&source, fps, &self.scratch_dir).ok());
             self.video_frames.insert(relative_src.to_string(), result);
         }
         let (dir, count) = self.video_frames.get(relative_src)?.as_ref()?;
@@ -1012,10 +1014,12 @@ fn draw_bitmap(
     border_color: Option<&str>,
     border_width: Option<f64>,
 ) {
-    let Some(mut src) = Pixmap::from_vec(
-        img.as_raw().clone(),
-        tiny_skia::IntSize::from_wh(img.width(), img.height()).unwrap(),
-    ) else {
+    // Une image décodée avec une dimension nulle (fichier corrompu/dégénéré) n'a pas de taille
+    // `tiny_skia` valide : on abandonne le dessin plutôt que de paniquer.
+    let Some(size) = tiny_skia::IntSize::from_wh(img.width(), img.height()) else {
+        return;
+    };
+    let Some(mut src) = Pixmap::from_vec(img.as_raw().clone(), size) else {
         return;
     };
     // `image` fournit du RGBA droit ; tiny-skia attend du prémultiplié.
@@ -1151,6 +1155,31 @@ fn draw_placeholder(
 mod tests {
     use super::*;
     use crate::model::*;
+
+    #[test]
+    fn draw_bitmap_does_not_panic_on_a_zero_dimension_image() {
+        let mut canvas = Pixmap::new(20, 20).unwrap();
+        let degenerate = image::RgbaImage::new(0, 0);
+        draw_bitmap(
+            &mut canvas,
+            &degenerate,
+            FitMode::Cover,
+            0.0,
+            0.0,
+            20.0,
+            20.0,
+            1.0,
+            0.0,
+            Transform::identity(),
+            (1.0, 0.0, 0.0),
+            None,
+            None,
+            None,
+            None,
+        );
+        // Rien à dessiner : le canvas reste transparent, aucun panic ne s'est produit.
+        assert_eq!(canvas.pixel(0, 0).unwrap().alpha(), 0);
+    }
 
     fn sample_project() -> Project {
         Project {

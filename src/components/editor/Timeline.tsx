@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Scissors, Trash2, Copy, Search, Plus } from "lucide-react";
+import { Scissors, Trash2, Copy, Search, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Project } from "../../bindings/Project";
 import type { Composition } from "../../bindings/Composition";
 import type { Element } from "../../bindings/Element";
@@ -18,6 +18,9 @@ interface Props {
   onSeek: (t: number) => void;
   onResizeComposition: (compId: string, duration: number) => void;
   onUpdateOverlap: (compId: string, overlap: number) => void;
+  onRenameComposition: (compId: string, name: string) => void;
+  onReorderComposition: (compId: string, direction: -1 | 1) => void;
+  onDeleteComposition: (compId: string) => void;
   onUpdateElementTiming: (elementId: string, startTime: number, duration: number | null) => void;
   onUpdateAudioTiming: (trackId: string, startTime: number, duration: number | null) => void;
   onSplit: () => void;
@@ -55,6 +58,9 @@ export default function Timeline({
   onSeek,
   onResizeComposition,
   onUpdateOverlap,
+  onRenameComposition,
+  onReorderComposition,
+  onDeleteComposition,
   onUpdateElementTiming,
   onUpdateAudioTiming,
   onSplit,
@@ -66,6 +72,7 @@ export default function Timeline({
   const { t } = useTranslation();
   const lanesRef = useRef<HTMLDivElement>(null);
   const [pxPerSec, setPxPerSec] = useState(40);
+  const [renamingCompId, setRenamingCompId] = useState<string | null>(null);
   const displayDuration = Math.max(30, Math.ceil(project.duration / 5) * 5);
 
   const ticks: number[] = [];
@@ -155,6 +162,37 @@ export default function Timeline({
             <Copy size={13} />
             {t("timeline.duplicate")}
           </button>
+          <span className="timeline-toolbar-divider" />
+          <button
+            type="button"
+            className="timeline-action"
+            onClick={() => onReorderComposition(activeCompositionId, -1)}
+            disabled={project.compositions.findIndex((c) => c.id === activeCompositionId) <= 0}
+            title={t("timeline.moveSceneLeft")}
+          >
+            <ChevronLeft size={13} />
+          </button>
+          <button
+            type="button"
+            className="timeline-action"
+            onClick={() => onReorderComposition(activeCompositionId, 1)}
+            disabled={
+              project.compositions.findIndex((c) => c.id === activeCompositionId) >= project.compositions.length - 1
+            }
+            title={t("timeline.moveSceneRight")}
+          >
+            <ChevronRight size={13} />
+          </button>
+          <button
+            type="button"
+            className="timeline-action"
+            onClick={() => onDeleteComposition(activeCompositionId)}
+            disabled={project.compositions.length <= 1}
+            title={t("timeline.deleteScene")}
+          >
+            <Trash2 size={13} />
+            {t("timeline.deleteScene")}
+          </button>
         </div>
         <div className="timeline-toolbar-right">
           <Search size={13} />
@@ -215,7 +253,34 @@ export default function Timeline({
                   onSelectComposition(comp.id);
                 }}
               >
-                <span className="timeline-scene-name">{comp.name}</span>
+                {renamingCompId === comp.id ? (
+                  <input
+                    autoFocus
+                    className="timeline-scene-name-input"
+                    defaultValue={comp.name}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
+                      onRenameComposition(comp.id, e.target.value.trim() || comp.name);
+                      setRenamingCompId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                      if (e.key === "Escape") setRenamingCompId(null);
+                    }}
+                  />
+                ) : (
+                  <span
+                    className="timeline-scene-name"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingCompId(comp.id);
+                    }}
+                    title={t("timeline.renameSceneHint")}
+                  >
+                    {comp.name}
+                  </span>
+                )}
                 {i < project.compositions.length - 1 && (
                   <input
                     type="number"

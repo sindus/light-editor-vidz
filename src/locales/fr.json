@@ -38,7 +38,18 @@
     "redo": "Rétablir",
     "delete": "Supprimer",
     "duplicate": "Dupliquer",
-    "aboutVersion": "v{{version}}"
+    "aboutVersion": "v{{version}}",
+    "shortcutsTitle": "Raccourcis clavier",
+    "shortcutDelete": "Supprimer la sélection",
+    "shortcutDuplicate": "Dupliquer la sélection",
+    "shortcutCopy": "Copier",
+    "shortcutPaste": "Coller",
+    "shortcutSelectAll": "Tout sélectionner",
+    "shortcutGroup": "Grouper",
+    "shortcutUngroup": "Dégrouper",
+    "shortcutDeselect": "Désélectionner",
+    "shortcutUndo": "Annuler",
+    "shortcutRedo": "Rétablir"
   },
   "update": {
     "checkForUpdates": "Rechercher une mise à jour",
@@ -81,9 +92,12 @@
     "imageTitle": "Propriétés de l'image",
     "videoTitle": "Propriétés de la vidéo",
     "shapeTitle": "Propriétés de la forme",
+    "shapeType": "Type de forme",
     "layerSelected": "Calque sélectionné",
     "content": "Contenu",
     "font": "Police",
+    "fontSizeAuto": "Auto",
+    "fontSizeAutoToggle": "Taille automatique adaptée à la boîte de texte (cliquer pour passer à une taille fixe)",
     "color": "Couleur",
     "position": "Position",
     "animation": "Animation d'entrée",
@@ -228,7 +242,11 @@
     "delete": "Supprimer",
     "duplicate": "Dupliquer",
     "addScene": "Ajouter une scène",
-    "overlap": "Chevauchement en fondu-enchaîné avec la scène suivante (s)"
+    "overlap": "Chevauchement en fondu-enchaîné avec la scène suivante (s)",
+    "moveSceneLeft": "Déplacer la scène plus tôt",
+    "moveSceneRight": "Déplacer la scène plus tard",
+    "deleteScene": "Supprimer la scène",
+    "renameSceneHint": "Double-cliquer pour renommer"
   },
   "exportModal": {
     "title": "Exporter la vidéo",

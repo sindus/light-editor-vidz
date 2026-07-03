@@ -38,7 +38,18 @@
     "redo": "Redo",
     "delete": "Delete",
     "duplicate": "Duplicate",
-    "aboutVersion": "v{{version}}"
+    "aboutVersion": "v{{version}}",
+    "shortcutsTitle": "Keyboard shortcuts",
+    "shortcutDelete": "Delete selection",
+    "shortcutDuplicate": "Duplicate selection",
+    "shortcutCopy": "Copy",
+    "shortcutPaste": "Paste",
+    "shortcutSelectAll": "Select all",
+    "shortcutGroup": "Group",
+    "shortcutUngroup": "Ungroup",
+    "shortcutDeselect": "Deselect",
+    "shortcutUndo": "Undo",
+    "shortcutRedo": "Redo"
   },
   "update": {
     "checkForUpdates": "Check for updates",
@@ -81,9 +92,12 @@
     "imageTitle": "Image properties",
     "videoTitle": "Video properties",
     "shapeTitle": "Shape properties",
+    "shapeType": "Shape type",
     "layerSelected": "Layer selected",
     "content": "Content",
     "font": "Font",
+    "fontSizeAuto": "Auto",
+    "fontSizeAutoToggle": "Auto-fit font size to the text box (click to switch to a fixed size)",
     "color": "Color",
     "position": "Position",
     "animation": "Entrance animation",
@@ -228,7 +242,11 @@
     "delete": "Delete",
     "duplicate": "Duplicate",
     "addScene": "Add a scene",
-    "overlap": "Crossfade overlap with next scene (s)"
+    "overlap": "Crossfade overlap with next scene (s)",
+    "moveSceneLeft": "Move scene earlier",
+    "moveSceneRight": "Move scene later",
+    "deleteScene": "Delete scene",
+    "renameSceneHint": "Double-click to rename"
   },
   "exportModal": {
     "title": "Export video",

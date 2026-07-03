@@ -109,6 +109,23 @@ export function removeComposition(project: Project, compId: string): Project {
   });
 }
 
+export function renameComposition(project: Project, compId: string, name: string): Project {
+  return {
+    ...project,
+    compositions: project.compositions.map((c) => (c.id === compId ? { ...c, name } : c)),
+  };
+}
+
+/** Échange la composition `compId` avec sa voisine directe (-1 = précédente, 1 = suivante). */
+export function reorderComposition(project: Project, compId: string, direction: -1 | 1): Project {
+  const idx = project.compositions.findIndex((c) => c.id === compId);
+  const targetIdx = idx + direction;
+  if (idx === -1 || targetIdx < 0 || targetIdx >= project.compositions.length) return project;
+  const compositions = [...project.compositions];
+  [compositions[idx], compositions[targetIdx]] = [compositions[targetIdx], compositions[idx]];
+  return recomputeStartTimes({ ...project, compositions });
+}
+
 /** Composition active à l'instant global `t`, avec le temps local (relatif à son début). */
 export function resolveActiveComposition(
   project: Project,

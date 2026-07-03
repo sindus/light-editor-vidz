@@ -41,6 +41,9 @@ import {
 } from "../lib/audio";
 import {
   addComposition,
+  removeComposition,
+  renameComposition,
+  reorderComposition,
   resolveActiveComposition,
   setCompositionOverlap,
   setCompositionTransitionIn,
@@ -508,6 +511,9 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
         onSeek={setCurrentTime}
         onResizeComposition={(compId, duration) => mutate((p) => updateCompositionDuration(p, compId, duration))}
         onUpdateOverlap={(compId, overlap) => mutate((p) => setCompositionOverlap(p, compId, overlap))}
+        onRenameComposition={(compId, name) => mutate((p) => renameComposition(p, compId, name))}
+        onReorderComposition={(compId, direction) => mutate((p) => reorderComposition(p, compId, direction))}
+        onDeleteComposition={(compId) => mutate((p) => removeComposition(p, compId))}
         onUpdateElementTiming={(elementId, startTime, duration) =>
           mutate((p) => updateElementTiming(p, elementId, startTime, duration))
         }

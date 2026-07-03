@@ -17,9 +17,12 @@ pub struct ExportOverrides {
 }
 
 /// Entrées de mixage pour les pistes audio des compositions (hors audio embarqué des éléments
-/// vidéo, géré séparément dans `export_video`). Fonction pure, testable sans I/O : chaque piste
-/// a un `start_time` relatif à sa composition, converti ici en position absolue sur la timeline
-/// globale (`composition.start_time + track.start_time`).
+/// vidéo, géré séparément dans `export_video`) : chaque piste a un `start_time` relatif à sa
+/// composition, converti ici en position absolue sur la timeline globale
+/// (`composition.start_time + track.start_time`). Une piste dont le `src` ne résout pas vers un
+/// fichier réel à l'intérieur de `project_dir` (fichier manquant, ou chemin tentant de sortir du
+/// dossier projet — voir `scene_core::paths::resolve_media_path`) est silencieusement ignorée,
+/// comme le reste de l'export lorsqu'une source média est introuvable.
 fn collect_composition_audio_inputs(project: &Project, project_dir: &Path) -> Vec<AudioMixInput> {
     let any_solo = project
         .compositions
@@ -34,16 +37,21 @@ fn collect_composition_audio_inputs(project: &Project, project_dir: &Path) -> Ve
                 .audio_tracks
                 .iter()
                 .filter(move |track| !track.muted && (!any_solo || track.solo))
-                .map(move |track| AudioMixInput {
-                    path: project_dir.join(&track.src),
-                    offset: track.audio_offset,
-                    start_time: composition.start_time + track.start_time,
-                    volume: track.volume,
-                    fade_in: track.fade_in.max(0.0),
-                    fade_out: track.fade_out.max(0.0),
-                    duration: track
-                        .duration
-                        .unwrap_or(composition.duration - track.start_time),
+                .filter_map(move |track| {
+                    let path =
+                        scene_core::paths::resolve_media_path(project_dir, &track.src).ok()?;
+                    Some(AudioMixInput {
+                        path,
+                        offset: track.audio_offset,
+                        start_time: composition.start_time + track.start_time,
+                        volume: track.volume,
+                        fade_in: track.fade_in.max(0.0),
+                        fade_out: track.fade_out.max(0.0),
+                        duration: track
+                            .duration
+                            .unwrap_or(composition.duration - track.start_time),
+                        speed: 1.0,
+                    })
                 })
         })
         .collect()
@@ -102,7 +110,10 @@ pub fn export_video(
             if video_el.volume <= 0.001 {
                 continue;
             }
-            let source_path = project_dir.join(&video_el.src);
+            let Ok(source_path) = scene_core::paths::resolve_media_path(project_dir, &video_el.src)
+            else {
+                continue;
+            };
             if !has_audio_stream(&source_path) {
                 continue;
             }
@@ -110,6 +121,13 @@ pub fn export_video(
             let active_duration = base
                 .duration
                 .unwrap_or(composition.duration - base.start_time);
+            // Même clamp que la sélection de frame vidéo (raster.rs) : la piste audio doit
+            // suivre la même vitesse que l'image, sous peine de désynchronisation progressive.
+            let speed = if video_el.playback_speed > 0.01 {
+                video_el.playback_speed
+            } else {
+                1.0
+            };
             audio_inputs.push(AudioMixInput {
                 path: source_path,
                 offset: video_el.video_offset,
@@ -118,6 +136,7 @@ pub fn export_video(
                 fade_in: 0.0,
                 fade_out: 0.0,
                 duration: active_duration,
+                speed,
             });
         }
     }
@@ -168,10 +187,30 @@ mod tests {
         }
     }
 
+    // `collect_composition_audio_inputs` résout désormais chaque `src` sur disque (protection
+    // contre les chemins qui sortiraient du dossier projet, voir `scene_core::paths`), donc les
+    // tests doivent pointer vers des fichiers réels plutôt qu'un dossier fictif.
+    fn temp_dir_with_files(test_name: &str, file_names: &[&str]) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "letest-{test_name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in file_names {
+            std::fs::write(dir.join(name), b"fake").unwrap();
+        }
+        dir
+    }
+
     #[test]
     fn audio_track_start_time_is_relative_to_its_own_composition() {
         // La 2e composition démarre à t=5 sur la timeline globale ; sa piste audio, avec un
         // start_time relatif de 1s, doit finir mixée à t=6 (pas t=1).
+        let dir = temp_dir_with_files("audio-relative-start", &["a1.mp3"]);
         let project = Project {
             name: "p".into(),
             width: 100,
@@ -183,9 +222,10 @@ mod tests {
                 empty_composition("c2", 5.0, 5.0, vec![audio_track("a1", 1.0)]),
             ],
         };
-        let inputs = collect_composition_audio_inputs(&project, Path::new("/proj"));
+        let inputs = collect_composition_audio_inputs(&project, &dir);
         assert_eq!(inputs.len(), 1);
         assert_eq!(inputs[0].start_time, 6.0);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -196,6 +236,7 @@ mod tests {
         muted_track.muted = true;
         let regular_track = audio_track("regular", 0.0);
 
+        let dir = temp_dir_with_files("audio-solo-mute", &["solo.mp3", "muted.mp3", "regular.mp3"]);
         let project = Project {
             name: "p".into(),
             width: 100,
@@ -209,9 +250,34 @@ mod tests {
                 vec![solo_track, muted_track, regular_track],
             )],
         };
-        let inputs = collect_composition_audio_inputs(&project, Path::new("/proj"));
+        let inputs = collect_composition_audio_inputs(&project, &dir);
         assert_eq!(inputs.len(), 1, "seule la piste solo doit être mixée");
         assert!(inputs[0].path.ends_with("solo.mp3"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_track_whose_src_escapes_the_project_directory_is_silently_skipped() {
+        let dir = temp_dir_with_files("audio-traversal", &[]);
+        let project = Project {
+            name: "p".into(),
+            width: 100,
+            height: 100,
+            fps: 30,
+            duration: 5.0,
+            compositions: vec![empty_composition(
+                "c1",
+                0.0,
+                5.0,
+                vec![audio_track("../etc/passwd", 0.0)],
+            )],
+        };
+        let inputs = collect_composition_audio_inputs(&project, &dir);
+        assert!(
+            inputs.is_empty(),
+            "un src hors du dossier projet doit être ignoré, pas suivi"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

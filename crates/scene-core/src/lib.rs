@@ -5,6 +5,7 @@
 pub mod animate;
 pub mod ffmpeg_path;
 pub mod model;
+pub mod paths;
 pub mod project;
 pub mod raster;
 pub mod timeline;

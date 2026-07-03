@@ -70,3 +70,6 @@ jobs:
 
       - name: Vitest
         run: npm run test
+
+      - name: Vite build
+        run: npm run build

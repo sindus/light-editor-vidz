@@ -10,6 +10,20 @@ import AppMenu from "./AppMenu";
 import UpdateStatus from "./UpdateStatus";
 import ExportModal from "./ExportModal";
 
+/** Miroir des raccourcis gérés par `onKeyDown` dans `Editor.tsx` — purement informatif ici. */
+const SHORTCUTS: [string, string][] = [
+  ["topbar.shortcutDelete", "Del"],
+  ["topbar.shortcutDuplicate", "Ctrl+D"],
+  ["topbar.shortcutCopy", "Ctrl+C"],
+  ["topbar.shortcutPaste", "Ctrl+V"],
+  ["topbar.shortcutSelectAll", "Ctrl+A"],
+  ["topbar.shortcutGroup", "Ctrl+G"],
+  ["topbar.shortcutUngroup", "Ctrl+Shift+G"],
+  ["topbar.shortcutDeselect", "Esc"],
+  ["topbar.shortcutUndo", "Ctrl+Z"],
+  ["topbar.shortcutRedo", "Ctrl+Shift+Z"],
+];
+
 interface Props {
   project: Project;
   projectDir: string;
@@ -124,6 +138,16 @@ export default function TopBar({
             ]}
           />
           <AppMenu label={t("topbar.menuHelp")}>
+            <div className="app-menu-shortcuts">
+              <div className="app-menu-shortcuts-title">{t("topbar.shortcutsTitle")}</div>
+              {SHORTCUTS.map(([labelKey, keys]) => (
+                <div className="app-menu-shortcut-row" key={labelKey}>
+                  <span>{t(labelKey)}</span>
+                  <span className="app-menu-shortcut mono">{keys}</span>
+                </div>
+              ))}
+            </div>
+            <div className="app-menu-separator" />
             <div className="app-menu-about">
               <div className="app-menu-about-name">LightEditorVidz</div>
               <div className="app-menu-about-version mono">{t("topbar.aboutVersion", { version })}</div>

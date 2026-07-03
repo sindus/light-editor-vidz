@@ -6,6 +6,8 @@ import {
   isElementActive,
   recomputeStartTimes,
   removeComposition,
+  renameComposition,
+  reorderComposition,
   resolveActiveComposition,
   updateCompositionDuration,
 } from "./timeline";
@@ -65,6 +67,38 @@ describe("addComposition / removeComposition / updateCompositionDuration", () =>
     const p = updateCompositionDuration(project([comp("a", 5), comp("b", 3)]), "a", 0.01);
     expect(p.compositions[0].duration).toBe(0.5);
     expect(p.compositions[1].start_time).toBe(0.5);
+  });
+});
+
+describe("renameComposition", () => {
+  it("renames only the matching composition", () => {
+    const p = renameComposition(project([comp("a", 5), comp("b", 3)]), "b", "Intro");
+    expect(p.compositions.map((c) => c.name)).toEqual(["a", "Intro"]);
+  });
+});
+
+describe("reorderComposition", () => {
+  it("swaps with the previous composition and recomputes timing", () => {
+    const p = reorderComposition(recomputeStartTimes(project([comp("a", 5), comp("b", 3)])), "b", -1);
+    expect(p.compositions.map((c) => c.id)).toEqual(["b", "a"]);
+    expect(p.compositions[0].start_time).toBe(0);
+    expect(p.compositions[1].start_time).toBe(3);
+  });
+
+  it("swaps with the next composition", () => {
+    const p = reorderComposition(recomputeStartTimes(project([comp("a", 5), comp("b", 3)])), "a", 1);
+    expect(p.compositions.map((c) => c.id)).toEqual(["b", "a"]);
+  });
+
+  it("is a no-op past either boundary", () => {
+    const base = recomputeStartTimes(project([comp("a", 5), comp("b", 3)]));
+    expect(reorderComposition(base, "a", -1).compositions.map((c) => c.id)).toEqual(["a", "b"]);
+    expect(reorderComposition(base, "b", 1).compositions.map((c) => c.id)).toEqual(["a", "b"]);
+  });
+
+  it("is a no-op for an unknown composition id", () => {
+    const base = recomputeStartTimes(project([comp("a", 5), comp("b", 3)]));
+    expect(reorderComposition(base, "missing", 1)).toBe(base);
   });
 });
 

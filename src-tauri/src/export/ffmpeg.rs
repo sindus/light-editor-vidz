@@ -91,6 +91,31 @@ pub struct AudioMixInput {
     pub fade_out: f64,
     /// Durée totale (secondes) de la piste dans le mix, nécessaire pour placer le fade-out.
     pub duration: f64,
+    /// Vitesse de lecture de la source vidéo associée (1.0 = normale). Doit rester cohérente
+    /// avec la vitesse appliquée aux frames vidéo (`playback_speed`), sous peine de désynchro
+    /// audio/vidéo progressive sur les clips accélérés/ralentis.
+    pub speed: f64,
+}
+
+/// Chaîne de filtres `atempo` équivalente à `speed`, en décomposant en facteurs dans
+/// l'intervalle `[0.5, 2.0]` supporté par une seule instance du filtre ffmpeg `atempo`.
+fn atempo_chain(speed: f64) -> String {
+    let mut remaining = speed;
+    let mut factors = Vec::new();
+    while remaining < 0.5 {
+        factors.push(0.5);
+        remaining /= 0.5;
+    }
+    while remaining > 2.0 {
+        factors.push(2.0);
+        remaining /= 2.0;
+    }
+    factors.push(remaining);
+    factors
+        .iter()
+        .map(|f| format!("atempo={f}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Indique si `path` contient au moins une piste audio (ex : une source vidéo peut ne pas en
@@ -142,10 +167,18 @@ pub fn mux_audio(
         let idx = i + 1; // 0 = vidéo
         let label = format!("a{i}");
         let delay_ms = (input.start_time.max(0.0) * 1000.0).round() as i64;
-        let mut chain = format!(
-            "[{idx}:a]adelay={delay_ms}|{delay_ms},volume={vol}",
+        // L'ajustement de tempo doit précéder `adelay` : il change la durée de l'audio, qui doit
+        // être stabilisée avant de le positionner sur la timeline globale.
+        let speed = input.speed.clamp(0.1, 4.0);
+        let mut chain = format!("[{idx}:a]");
+        if (speed - 1.0).abs() > 0.001 {
+            chain.push_str(&atempo_chain(speed));
+            chain.push(',');
+        }
+        chain.push_str(&format!(
+            "adelay={delay_ms}|{delay_ms},volume={vol}",
             vol = input.volume.clamp(0.0, 2.0)
-        );
+        ));
         if input.fade_in > 0.0 {
             chain.push_str(&format!(",afade=t=in:st=0:d={}", input.fade_in));
         }
@@ -200,8 +233,76 @@ pub fn mux_audio(
 
 fn tail(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("…{}", &s[s.len() - max_len..])
+        return s.to_string();
+    }
+    // `s.len() - max_len` peut tomber au milieu d'un caractère UTF-8 multi-octet (la sortie
+    // ffmpeg peut contenir des chemins/accents non-ASCII) : on recule jusqu'à la frontière de
+    // caractère la plus proche pour éviter un panic sur un découpage de `&str` invalide.
+    let mut start = s.len() - max_len;
+    while start > 0 && !s.is_char_boundary(start) {
+        start -= 1;
+    }
+    format!("…{}", &s[start..])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn product_of_atempo_factors(chain: &str) -> f64 {
+        chain
+            .split(',')
+            .map(|f| f.strip_prefix("atempo=").unwrap().parse::<f64>().unwrap())
+            .product()
+    }
+
+    #[test]
+    fn atempo_chain_is_a_single_filter_within_the_native_range() {
+        assert_eq!(atempo_chain(1.5), "atempo=1.5");
+        assert_eq!(atempo_chain(0.5), "atempo=0.5");
+        assert_eq!(atempo_chain(2.0), "atempo=2");
+    }
+
+    #[test]
+    fn atempo_chain_splits_out_of_range_speeds_into_factors_within_0_5_to_2() {
+        for speed in [0.1, 0.25, 3.0, 4.0] {
+            let chain = atempo_chain(speed);
+            for factor in chain
+                .split(',')
+                .map(|f| f.strip_prefix("atempo=").unwrap().parse::<f64>().unwrap())
+            {
+                assert!(
+                    (0.5..=2.0).contains(&factor),
+                    "facteur {factor} hors de l'intervalle supporté par ffmpeg pour vitesse={speed}"
+                );
+            }
+            assert!(
+                (product_of_atempo_factors(&chain) - speed).abs() < 1e-9,
+                "le produit des facteurs doit reconstituer la vitesse demandée ({speed})"
+            );
+        }
+    }
+
+    #[test]
+    fn tail_returns_input_unchanged_when_shorter_than_max_len() {
+        assert_eq!(tail("short", 2000), "short");
+    }
+
+    #[test]
+    fn tail_truncates_and_prefixes_with_ellipsis() {
+        let s = "a".repeat(2010);
+        let result = tail(&s, 2000);
+        assert!(result.starts_with('…'));
+        assert_eq!(result.chars().count(), 2001);
+    }
+
+    #[test]
+    fn tail_does_not_panic_when_the_cut_point_falls_inside_a_multibyte_char() {
+        // Chaque "é" fait 2 octets en UTF-8 (frontières de caractère aux offsets pairs) : avec
+        // `max_len` impair, `len - max_len` tombe systématiquement au milieu d'un caractère.
+        let s = "é".repeat(1500); // 3000 octets, 1500 caractères
+        let result = tail(&s, 1999); // 3000 - 1999 = 1001 (impair, pas une frontière de caractère)
+        assert!(result.starts_with('…'));
+        assert!(result.chars().skip(1).all(|c| c == 'é'));
     }
 }
