@@ -289,23 +289,21 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
   }
 
   function handleDuplicateSelected() {
-    if (selectedIds.length === 0) return;
-    mutate((p) => {
-      let next = p;
-      const newIds: string[] = [];
-      for (const id of selectedAudioIds) {
-        const result = duplicateAudioTrackInProject(next, id);
-        next = result.project;
-        if (result.newId) newIds.push(result.newId);
-      }
-      if (selectedElementIds.length > 0) {
-        const result = duplicateElementsInProject(next, selectedElementIds);
-        next = result.project;
-        newIds.push(...result.newIds);
-      }
-      setSelectedIds(newIds);
-      return next;
-    });
+    if (!project || selectedIds.length === 0) return;
+    let next = project;
+    const newIds: string[] = [];
+    for (const id of selectedAudioIds) {
+      const result = duplicateAudioTrackInProject(next, id);
+      next = result.project;
+      if (result.newId) newIds.push(result.newId);
+    }
+    if (selectedElementIds.length > 0) {
+      const result = duplicateElementsInProject(next, selectedElementIds);
+      next = result.project;
+      newIds.push(...result.newIds);
+    }
+    mutate(() => next);
+    setSelectedIds(newIds);
   }
 
   function handleSplitSelected() {
@@ -332,23 +330,21 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
   }
 
   function handlePaste() {
-    if (!active || clipboard.length === 0) return;
-    mutate((p) => {
-      let next = p;
-      const newIds: string[] = [];
-      for (const el of clipboard) {
-        const copy = {
-          ...el,
-          id: crypto.randomUUID(),
-          x: Math.min(95, el.x + 3),
-          y: Math.min(95, el.y + 3),
-        } as Element;
-        next = addElementToComposition(next, active.composition.id, copy);
-        newIds.push(copy.id);
-      }
-      setSelectedIds(newIds);
-      return next;
-    });
+    if (!project || !active || clipboard.length === 0) return;
+    let next = project;
+    const newIds: string[] = [];
+    for (const el of clipboard) {
+      const copy = {
+        ...el,
+        id: crypto.randomUUID(),
+        x: Math.min(95, el.x + 3),
+        y: Math.min(95, el.y + 3),
+      } as Element;
+      next = addElementToComposition(next, active.composition.id, copy);
+      newIds.push(copy.id);
+    }
+    mutate(() => next);
+    setSelectedIds(newIds);
   }
 
   useEffect(() => {

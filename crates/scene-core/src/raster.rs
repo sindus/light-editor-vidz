@@ -70,6 +70,13 @@ fn extract_video_frames(
     Ok((out_dir, count))
 }
 
+/// Charge une image depuis le disque sans la mettre en cache — pour les frames vidéo décodées
+/// (un fichier PNG distinct et à usage unique par frame), contrairement à `load_image_abs`
+/// (images statiques, réutilisées à l'identique sur toute la durée de l'export).
+fn load_image_uncached(path: &Path) -> Option<image::RgbaImage> {
+    image::open(path).ok().map(|i| i.to_rgba8())
+}
+
 fn parse_css_color(s: &str) -> Color {
     // Supporte "rgba(r,g,b,a)" (format utilisé par le frontend) avec repli sur blanc opaque.
     if let Some(inner) = s.strip_prefix("rgba(").and_then(|s| s.strip_suffix(')')) {
@@ -156,7 +163,7 @@ impl FrameRenderer {
     fn load_image_abs(&mut self, key: String, path: PathBuf) -> Option<&image::RgbaImage> {
         self.image_cache
             .entry(key)
-            .or_insert_with(|| image::open(path).ok().map(|i| i.to_rgba8()))
+            .or_insert_with(|| load_image_uncached(&path))
             .as_ref()
     }
 
@@ -380,11 +387,12 @@ impl FrameRenderer {
                         local_element_time.max(0.0) * speed + video_el.video_offset;
                     let frame_path =
                         self.video_frame_at(project_dir, &video_el.src, fps, local_video_time);
-                    let frame = frame_path.and_then(|p| {
-                        let key = p.to_string_lossy().to_string();
-                        self.load_image_abs(key, p)
-                    });
-                    if let Some(img) = frame {
+                    // Chaque frame vidéo décodée est un fichier PNG distinct, utilisé une seule
+                    // fois (pas de lecture en arrière) : on la charge sans la mettre en cache,
+                    // sous peine de faire croître `image_cache` sans limite sur tout l'export
+                    // (des dizaines de milliers d'entrées pour une vidéo longue).
+                    let frame = frame_path.and_then(|p| load_image_uncached(&p));
+                    if let Some(img) = &frame {
                         draw_bitmap(
                             scene,
                             img,
@@ -711,8 +719,57 @@ impl FrameRenderer {
     }
 }
 
-/// Flou simple par boîte glissante (approximation raisonnable d'un flou gaussien pour ce
-/// besoin), appliqué en place sur un buffer RGBA prémultiplié.
+/// Somme cumulée (par canal) d'une ligne/colonne de `len` pixels, `prefix[i]` = somme de
+/// `values[0..i]` — permet de calculer la somme de n'importe quelle plage en O(1)
+/// (`prefix[hi+1] - prefix[lo]`) plutôt que de ré-échantillonner `2*radius+1` pixels par position.
+fn prefix_sums(
+    get: impl Fn(i32) -> tiny_skia::PremultipliedColorU8,
+    len: i32,
+) -> Vec<(u32, u32, u32, u32)> {
+    let mut prefix = Vec::with_capacity(len as usize + 1);
+    prefix.push((0, 0, 0, 0));
+    let mut acc = (0u32, 0u32, 0u32, 0u32);
+    for i in 0..len {
+        let p = get(i);
+        acc = (
+            acc.0 + p.red() as u32,
+            acc.1 + p.green() as u32,
+            acc.2 + p.blue() as u32,
+            acc.3 + p.alpha() as u32,
+        );
+        prefix.push(acc);
+    }
+    prefix
+}
+
+fn transparent() -> tiny_skia::PremultipliedColorU8 {
+    tiny_skia::PremultipliedColorU8::from_rgba(0, 0, 0, 0).unwrap()
+}
+
+fn box_average(
+    prefix: &[(u32, u32, u32, u32)],
+    i: i32,
+    radius: i32,
+    len: i32,
+) -> tiny_skia::PremultipliedColorU8 {
+    let lo = (i - radius).max(0);
+    let hi = (i + radius).min(len - 1);
+    let count = (hi - lo + 1) as u32;
+    let sum_hi = prefix[(hi + 1) as usize];
+    let sum_lo = prefix[lo as usize];
+    tiny_skia::PremultipliedColorU8::from_rgba(
+        ((sum_hi.0 - sum_lo.0) / count) as u8,
+        ((sum_hi.1 - sum_lo.1) / count) as u8,
+        ((sum_hi.2 - sum_lo.2) / count) as u8,
+        ((sum_hi.3 - sum_lo.3) / count) as u8,
+    )
+    .unwrap_or(transparent())
+}
+
+/// Flou par boîte glissante (approximation raisonnable d'un flou gaussien pour ce besoin),
+/// appliqué en place sur un buffer RGBA prémultiplié. Deux passes séparables (horizontale puis
+/// verticale) via sommes préfixes : O(largeur×hauteur) par passe au lieu de O(largeur×hauteur×
+/// rayon) pour un ré-échantillonnage naïf — significatif pour les rayons de flou élevés.
 fn box_blur(pixmap: &mut Pixmap, radius_px: f32) {
     let radius = radius_px.round().max(1.0) as i32;
     let width = pixmap.width() as i32;
@@ -722,61 +779,23 @@ fn box_blur(pixmap: &mut Pixmap, radius_px: f32) {
     }
 
     let src: Vec<tiny_skia::PremultipliedColorU8> = pixmap.pixels().to_vec();
-    let mut tmp = src.clone();
-
-    let sample =
-        |buf: &[tiny_skia::PremultipliedColorU8], x: i32, y: i32| -> (u32, u32, u32, u32) {
-            let cx = x.clamp(0, width - 1);
-            let cy = y.clamp(0, height - 1);
-            let p = buf[(cy * width + cx) as usize];
-            (
-                p.red() as u32,
-                p.green() as u32,
-                p.blue() as u32,
-                p.alpha() as u32,
-            )
-        };
+    let mut tmp = vec![transparent(); src.len()];
 
     // Passe horizontale.
     for y in 0..height {
+        let row_start = (y * width) as usize;
+        let prefix = prefix_sums(|x| src[row_start + x as usize], width);
         for x in 0..width {
-            let mut sum = (0u32, 0u32, 0u32, 0u32);
-            let mut count = 0u32;
-            for dx in -radius..=radius {
-                let s = sample(&src, x + dx, y);
-                sum = (sum.0 + s.0, sum.1 + s.1, sum.2 + s.2, sum.3 + s.3);
-                count += 1;
-            }
-            let idx = (y * width + x) as usize;
-            tmp[idx] = tiny_skia::PremultipliedColorU8::from_rgba(
-                (sum.0 / count) as u8,
-                (sum.1 / count) as u8,
-                (sum.2 / count) as u8,
-                (sum.3 / count) as u8,
-            )
-            .unwrap_or(tmp[idx]);
+            tmp[row_start + x as usize] = box_average(&prefix, x, radius, width);
         }
     }
 
     // Passe verticale.
     let pixels = pixmap.pixels_mut();
-    for y in 0..height {
-        for x in 0..width {
-            let mut sum = (0u32, 0u32, 0u32, 0u32);
-            let mut count = 0u32;
-            for dy in -radius..=radius {
-                let s = sample(&tmp, x, y + dy);
-                sum = (sum.0 + s.0, sum.1 + s.1, sum.2 + s.2, sum.3 + s.3);
-                count += 1;
-            }
-            let idx = (y * width + x) as usize;
-            pixels[idx] = tiny_skia::PremultipliedColorU8::from_rgba(
-                (sum.0 / count) as u8,
-                (sum.1 / count) as u8,
-                (sum.2 / count) as u8,
-                (sum.3 / count) as u8,
-            )
-            .unwrap_or(pixels[idx]);
+    for x in 0..width {
+        let prefix = prefix_sums(|y| tmp[(y * width + x) as usize], height);
+        for y in 0..height {
+            pixels[(y * width + x) as usize] = box_average(&prefix, y, radius, height);
         }
     }
 }
@@ -1763,6 +1782,98 @@ mod tests {
         assert!(
             pixel.red() > 150 && pixel.green() < 100,
             "pixel attendu rouge, obtenu {pixel:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn decoded_video_frames_are_not_retained_in_the_image_cache() {
+        // Régression : chaque frame vidéo décodée est un fichier PNG distinct et à usage
+        // unique. Les mettre en cache indéfiniment ferait croître `image_cache` sans limite
+        // sur toute la durée de l'export (des dizaines de milliers d'entrées pour une vidéo
+        // longue) — elles doivent être chargées puis oubliées, pas accumulées.
+        let dir = std::env::temp_dir().join(format!(
+            "letest-videocache-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let video_path = dir.join("video.mp4");
+        let status = std::process::Command::new("ffmpeg")
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=blue:s=32x32:d=1",
+                "-r",
+                "10",
+            ])
+            .arg(&video_path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .expect("ffmpeg doit être disponible");
+        assert!(status.success(), "génération de la vidéo de test échouée");
+
+        let project = Project {
+            name: "Video Cache Test".into(),
+            width: 32,
+            height: 32,
+            fps: 10,
+            duration: 1.0,
+            compositions: vec![Composition {
+                id: "c1".into(),
+                name: "Scene 1".into(),
+                start_time: 0.0,
+                duration: 1.0,
+                elements: vec![Element::Video(VideoElement {
+                    base: ElementBase {
+                        id: "v1".into(),
+                        name: "Video".into(),
+                        start_time: 0.0,
+                        duration: None,
+                        x: 0.0,
+                        y: 0.0,
+                        width: 100.0,
+                        height: 100.0,
+                        rotation: 0.0,
+                        animations: vec![],
+                        group_id: None,
+                        blend_mode: None,
+                    },
+                    src: "video.mp4".into(),
+                    fit_mode: FitMode::Cover,
+                    background_color: None,
+                    image_pan: None,
+                    video_offset: 0.0,
+                    corner_radius: None,
+                    border_color: None,
+                    border_width: None,
+                    volume: 1.0,
+                    playback_speed: 1.0,
+                })],
+                audio_tracks: vec![],
+                transition_in: None,
+                transition_out: None,
+                overlap_next: 0.0,
+            }],
+        };
+
+        let mut renderer = FrameRenderer::with_scratch_dir(dir.join("scratch"));
+        // Rend plusieurs frames distinctes (chacune décode un PNG différent).
+        for i in 0..10 {
+            renderer.render_frame(&project, &dir, i as f64 / 10.0);
+        }
+        assert_eq!(
+            renderer.image_cache.len(),
+            0,
+            "les frames vidéo décodées ne doivent pas s'accumuler dans image_cache"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
