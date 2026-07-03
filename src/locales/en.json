@@ -145,7 +145,20 @@
     "backgroundColorOn": "On",
     "backgroundColorOff": "None",
     "borderRadius": "Corner radius",
-    "videoOffset": "Trim in-point (s)"
+    "videoOffset": "Trim in-point (s)",
+    "layers": "Layers",
+    "multiSelection": "{{count}} elements selected",
+    "multiSelectionHint": "Align, distribute, or edit together",
+    "align": "Align",
+    "alignLeft": "Align left",
+    "alignCenterH": "Align center (horizontal)",
+    "alignRight": "Align right",
+    "alignTop": "Align top",
+    "alignCenterV": "Align middle (vertical)",
+    "alignBottom": "Align bottom",
+    "distribute": "Distribute",
+    "distributeH": "Distribute horizontally",
+    "distributeV": "Distribute vertically"
   },
   "canvas": {
     "undo": "Undo",

@@ -252,3 +252,122 @@ export function findElement(project: Project, elementId: string | null): Element
   }
   return null;
 }
+
+/** Duplique plusieurs éléments d'un coup, en conservant leur ordre relatif. */
+export function duplicateElementsInProject(
+  project: Project,
+  elementIds: string[],
+): { project: Project; newIds: string[] } {
+  let current = project;
+  const newIds: string[] = [];
+  for (const id of elementIds) {
+    const { project: next, newId } = duplicateElementInProject(current, id);
+    current = next;
+    if (newId) newIds.push(newId);
+  }
+  return { project: current, newIds };
+}
+
+/** Supprime plusieurs éléments (par id) de toutes les compositions. */
+export function deleteElementsFromProject(project: Project, elementIds: string[]): Project {
+  const idSet = new Set(elementIds);
+  return {
+    ...project,
+    compositions: project.compositions.map((comp) => ({
+      ...comp,
+      elements: comp.elements.filter((el) => !idSet.has(el.id)),
+    })),
+  };
+}
+
+export type AlignEdge = "left" | "center-h" | "right" | "top" | "center-v" | "bottom";
+
+/** Aligne les éléments donnés entre eux (bbox englobante) ou, si un seul, sur le canvas (0-100). */
+export function alignElements(project: Project, compId: string, elementIds: string[], edge: AlignEdge): Project {
+  return {
+    ...project,
+    compositions: project.compositions.map((comp) => {
+      if (comp.id !== compId) return comp;
+      const targets = comp.elements.filter((el) => elementIds.includes(el.id));
+      if (targets.length === 0) return comp;
+      const bboxLeft = targets.length > 1 ? Math.min(...targets.map((el) => el.x)) : 0;
+      const bboxRight = targets.length > 1 ? Math.max(...targets.map((el) => el.x + el.width)) : 100;
+      const bboxTop = targets.length > 1 ? Math.min(...targets.map((el) => el.y)) : 0;
+      const bboxBottom = targets.length > 1 ? Math.max(...targets.map((el) => el.y + el.height)) : 100;
+      return {
+        ...comp,
+        elements: comp.elements.map((el) => {
+          if (!elementIds.includes(el.id)) return el;
+          switch (edge) {
+            case "left":
+              return { ...el, x: bboxLeft };
+            case "right":
+              return { ...el, x: bboxRight - el.width };
+            case "center-h":
+              return { ...el, x: bboxLeft + (bboxRight - bboxLeft) / 2 - el.width / 2 };
+            case "top":
+              return { ...el, y: bboxTop };
+            case "bottom":
+              return { ...el, y: bboxBottom - el.height };
+            case "center-v":
+              return { ...el, y: bboxTop + (bboxBottom - bboxTop) / 2 - el.height / 2 };
+            default:
+              return el;
+          }
+        }),
+      };
+    }),
+  };
+}
+
+/** Distribue uniformément l'espacement entre au moins 3 éléments, sur l'axe donné. */
+export function distributeElements(
+  project: Project,
+  compId: string,
+  elementIds: string[],
+  axis: "horizontal" | "vertical",
+): Project {
+  return {
+    ...project,
+    compositions: project.compositions.map((comp) => {
+      if (comp.id !== compId) return comp;
+      const targets = comp.elements.filter((el) => elementIds.includes(el.id));
+      if (targets.length < 3) return comp;
+      const sorted = [...targets].sort((a, b) => (axis === "horizontal" ? a.x - b.x : a.y - b.y));
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const span = axis === "horizontal" ? last.x + last.width - first.x : last.y + last.height - first.y;
+      const totalSize = sorted.reduce((sum, el) => sum + (axis === "horizontal" ? el.width : el.height), 0);
+      const gap = (span - totalSize) / (sorted.length - 1);
+      let cursor = axis === "horizontal" ? first.x : first.y;
+      const newPositions = new Map<string, number>();
+      for (const el of sorted) {
+        newPositions.set(el.id, cursor);
+        cursor += (axis === "horizontal" ? el.width : el.height) + gap;
+      }
+      return {
+        ...comp,
+        elements: comp.elements.map((el) => {
+          const pos = newPositions.get(el.id);
+          if (pos === undefined) return el;
+          return axis === "horizontal" ? { ...el, x: pos } : { ...el, y: pos };
+        }),
+      };
+    }),
+  };
+}
+
+/** Déplace un élément à un index précis dans le tableau (ordre d'empilement = z-order). */
+export function moveElementToIndex(project: Project, elementId: string, toIndex: number): Project {
+  return {
+    ...project,
+    compositions: project.compositions.map((comp) => {
+      const fromIndex = comp.elements.findIndex((el) => el.id === elementId);
+      if (fromIndex === -1) return comp;
+      const elements = [...comp.elements];
+      const [moved] = elements.splice(fromIndex, 1);
+      elements.splice(Math.max(0, Math.min(elements.length, toIndex)), 0, moved);
+      return { ...comp, elements };
+    }),
+  };
+}

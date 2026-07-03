@@ -5,8 +5,11 @@ import type { ShapeType } from "../bindings/ShapeType";
 import type { AudioTrack } from "../bindings/AudioTrack";
 import { loadProject, newProject, readTextFile, saveProject } from "../lib/commands";
 import { parseLegacyProjectJSON } from "../lib/legacyImport";
+import type { Element } from "../bindings/Element";
 import {
   addElementToComposition,
+  alignElements,
+  type AlignEdge,
   createImageElement,
   createShapeElement,
   createStyledTextElement,
@@ -14,9 +17,11 @@ import {
   createTitleElement,
   createVideoElement,
   type TextStylePreset,
-  deleteElementFromProject,
-  duplicateElementInProject,
+  deleteElementsFromProject,
+  distributeElements,
+  duplicateElementsInProject,
   findElement,
+  moveElementToIndex,
   reorderElementInProject,
   splitElementInProject,
   updateElementInProject,
@@ -61,10 +66,14 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
   const [leftTab, setLeftTab] = useState<LeftTab>("text");
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [past, setPast] = useState<Project[]>([]);
   const [future, setFuture] = useState<Project[]>([]);
+  const [clipboard, setClipboard] = useState<Element[]>([]);
+  const [timelineSearch, setTimelineSearch] = useState("");
+
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
 
   const projectRef = useRef(project);
   useEffect(() => {
@@ -180,17 +189,19 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
 
   const active = project ? resolveActiveComposition(project, currentTime) : null;
   const isAudioSelected = !!project?.audio_tracks.some((t) => t.id === selectedId);
+  const selectedAudioIds = project ? selectedIds.filter((id) => project.audio_tracks.some((t) => t.id === id)) : [];
+  const selectedElementIds = selectedIds.filter((id) => !selectedAudioIds.includes(id));
 
   function addAndSelect(element: ReturnType<typeof createTitleElement>) {
     if (!project || !active) return;
     mutate((p) => addElementToComposition(p, active.composition.id, element));
-    setSelectedId(element.id);
+    setSelectedIds([element.id]);
   }
 
   function addAndSelectAudio(relativeSrc: string, name: string) {
     const track = createAudioTrack(relativeSrc, name);
     mutate((p) => addAudioTrackToProject(p, track));
-    setSelectedId(track.id);
+    setSelectedIds([track.id]);
   }
 
   function handleUpdateElement(elementId: string, patch: ElementPatch) {
@@ -207,27 +218,60 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
     mutate((p) => reorderElementInProject(p, selectedId, direction));
   }
 
-  function handleDeleteSelected() {
-    if (!selectedId) return;
-    if (isAudioSelected) {
-      mutate((p) => removeAudioTrackFromProject(p, selectedId));
-    } else {
-      mutate((p) => deleteElementFromProject(p, selectedId));
+  function handleReorderLayer(elementId: string, toIndex: number) {
+    mutate((p) => moveElementToIndex(p, elementId, toIndex));
+  }
+
+  function handleSelectElement(id: string | null, additive: boolean) {
+    if (id === null) {
+      if (!additive) setSelectedIds([]);
+      return;
     }
-    setSelectedId(null);
+    setSelectedIds((prev) => {
+      if (additive) return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      return [id];
+    });
+  }
+
+  function handleMarqueeSelect(ids: string[], additive: boolean) {
+    if (ids.length === 0) {
+      if (!additive) setSelectedIds([]);
+      return;
+    }
+    setSelectedIds((prev) => (additive ? Array.from(new Set([...prev, ...ids])) : ids));
+  }
+
+  function handleDeleteSelected() {
+    if (selectedIds.length === 0) return;
+    mutate((p) => {
+      let next = p;
+      if (selectedAudioIds.length > 0) {
+        next = selectedAudioIds.reduce((acc, id) => removeAudioTrackFromProject(acc, id), next);
+      }
+      if (selectedElementIds.length > 0) {
+        next = deleteElementsFromProject(next, selectedElementIds);
+      }
+      return next;
+    });
+    setSelectedIds([]);
   }
 
   function handleDuplicateSelected() {
-    if (!selectedId) return;
-    setProject((p) => {
-      if (!p) return p;
-      if (isAudioSelected) {
-        const { project: next, newId } = duplicateAudioTrackInProject(p, selectedId);
-        if (newId) setSelectedId(newId);
-        return next;
+    if (selectedIds.length === 0) return;
+    mutate((p) => {
+      let next = p;
+      const newIds: string[] = [];
+      for (const id of selectedAudioIds) {
+        const result = duplicateAudioTrackInProject(next, id);
+        next = result.project;
+        if (result.newId) newIds.push(result.newId);
       }
-      const { project: next, newId } = duplicateElementInProject(p, selectedId);
-      if (newId) setSelectedId(newId);
+      if (selectedElementIds.length > 0) {
+        const result = duplicateElementsInProject(next, selectedElementIds);
+        next = result.project;
+        newIds.push(...result.newIds);
+      }
+      setSelectedIds(newIds);
       return next;
     });
   }
@@ -237,16 +281,65 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
     mutate((p) => splitElementInProject(p, active.composition.id, selectedId, active.localTime));
   }
 
+  function handleAlign(edge: AlignEdge) {
+    if (!active || selectedElementIds.length === 0) return;
+    mutate((p) => alignElements(p, active.composition.id, selectedElementIds, edge));
+  }
+
+  function handleDistribute(axis: "horizontal" | "vertical") {
+    if (!active || selectedElementIds.length < 3) return;
+    mutate((p) => distributeElements(p, active.composition.id, selectedElementIds, axis));
+  }
+
+  function handleCopy() {
+    if (!project || selectedElementIds.length === 0) return;
+    const elements = selectedElementIds
+      .map((id) => findElement(project, id))
+      .filter((el): el is Element => el !== null);
+    setClipboard(elements);
+  }
+
+  function handlePaste() {
+    if (!active || clipboard.length === 0) return;
+    mutate((p) => {
+      let next = p;
+      const newIds: string[] = [];
+      for (const el of clipboard) {
+        const copy = {
+          ...el,
+          id: crypto.randomUUID(),
+          x: Math.min(95, el.x + 3),
+          y: Math.min(95, el.y + 3),
+        } as Element;
+        next = addElementToComposition(next, active.composition.id, copy);
+        newIds.push(copy.id);
+      }
+      setSelectedIds(newIds);
+      return next;
+    });
+  }
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
         e.preventDefault();
         handleDeleteSelected();
-      } else if (e.key.toLowerCase() === "d" && (e.metaKey || e.ctrlKey) && selectedId) {
+      } else if (e.key.toLowerCase() === "d" && (e.metaKey || e.ctrlKey) && selectedIds.length > 0) {
         e.preventDefault();
         handleDuplicateSelected();
+      } else if (e.key.toLowerCase() === "c" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleCopy();
+      } else if (e.key.toLowerCase() === "v" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handlePaste();
+      } else if (e.key.toLowerCase() === "a" && (e.metaKey || e.ctrlKey) && active) {
+        e.preventDefault();
+        setSelectedIds(active.composition.elements.map((el) => el.id));
+      } else if (e.key === "Escape") {
+        setSelectedIds([]);
       } else if (e.key.toLowerCase() === "z" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
         e.preventDefault();
         handleRedo();
@@ -304,7 +397,7 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
         canRedo={canRedo}
         onDeleteSelected={handleDeleteSelected}
         onDuplicateSelected={handleDuplicateSelected}
-        hasSelection={!!selectedId}
+        hasSelection={selectedIds.length > 0}
       />
       <div className="editor-middle">
         <CategoryRail active={leftTab} onChange={setLeftTab} />
@@ -327,8 +420,9 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
           playing={playing}
           onTogglePlay={() => setPlaying((p) => !p)}
           onSeekToStart={() => setCurrentTime(active.composition.start_time)}
-          selectedId={selectedId}
-          onSelectElement={setSelectedId}
+          selectedIds={selectedIds}
+          onSelectElement={handleSelectElement}
+          onMarqueeSelect={handleMarqueeSelect}
           onUpdateElement={handleUpdateElement}
           onSetTransitionIn={(transitionType) =>
             mutate((p) => setCompositionTransitionIn(p, active.composition.id, transitionType))
@@ -352,18 +446,28 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
           onUpdate={(patch) => selectedId && handleUpdateElement(selectedId, patch)}
           onUpdateAudio={handleUpdateAudio}
           onReorder={handleReorder}
+          elements={active.composition.elements}
+          selectedIds={selectedIds}
+          onSelectLayer={(id, additive) => handleSelectElement(id, additive)}
+          onReorderLayer={handleReorderLayer}
+          onDeleteLayer={(id) => {
+            mutate((p) => deleteElementsFromProject(p, [id]));
+            setSelectedIds((prev) => prev.filter((x) => x !== id));
+          }}
+          onAlign={handleAlign}
+          onDistribute={handleDistribute}
         />
       </div>
       <Timeline
         project={project}
         activeCompositionId={active.composition.id}
-        selectedElementId={selectedId}
+        selectedElementIds={selectedIds}
         currentTime={currentTime}
         onSelectComposition={(id) => {
           const comp = project.compositions.find((c) => c.id === id);
           if (comp) setCurrentTime(comp.start_time);
         }}
-        onSelectElement={setSelectedId}
+        onSelectElement={(id) => handleSelectElement(id, false)}
         onAddComposition={() => mutate(addComposition)}
         onSeek={setCurrentTime}
         onResizeComposition={(compId, duration) => mutate((p) => updateCompositionDuration(p, compId, duration))}
@@ -377,6 +481,8 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
         onSplit={handleSplitSelected}
         onDelete={handleDeleteSelected}
         onDuplicate={handleDuplicateSelected}
+        searchQuery={timelineSearch}
+        onSearchChange={setTimelineSearch}
       />
     </div>
   );

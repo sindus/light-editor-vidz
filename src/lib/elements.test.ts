@@ -3,6 +3,7 @@ import type { Project } from "../bindings/Project";
 import type { Composition } from "../bindings/Composition";
 import {
   addElementToComposition,
+  alignElements,
   createImageElement,
   createShapeElement,
   createStyledTextElement,
@@ -10,8 +11,12 @@ import {
   createTitleElement,
   createVideoElement,
   deleteElementFromProject,
+  deleteElementsFromProject,
+  distributeElements,
   duplicateElementInProject,
+  duplicateElementsInProject,
   findElement,
+  moveElementToIndex,
   reorderElementInProject,
   splitElementInProject,
   updateElementInProject,
@@ -154,5 +159,86 @@ describe("splitElementInProject", () => {
     const p = addElementToComposition(project([emptyComposition("a", 5)]), "a", el);
     const next = splitElementInProject(p, "a", el.id, 0.01);
     expect(next.compositions[0].elements).toHaveLength(1);
+  });
+});
+
+describe("deleteElementsFromProject / duplicateElementsInProject", () => {
+  it("deletes multiple elements in one call", () => {
+    const elA = createTitleElement();
+    const elB = createSubtitleElement();
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    const next = deleteElementsFromProject(p, [elA.id, elB.id]);
+    expect(next.compositions[0].elements).toHaveLength(0);
+  });
+
+  it("duplicates multiple elements, returning every new id", () => {
+    const elA = createTitleElement();
+    const elB = createSubtitleElement();
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    const { project: next, newIds } = duplicateElementsInProject(p, [elA.id, elB.id]);
+    expect(newIds).toHaveLength(2);
+    expect(next.compositions[0].elements).toHaveLength(4);
+  });
+});
+
+describe("alignElements", () => {
+  it("aligns a single element's left edge to the canvas edge", () => {
+    const el = { ...createTitleElement(), x: 40, width: 20 };
+    const p = addElementToComposition(project([emptyComposition("a")]), "a", el);
+    const next = alignElements(p, "a", [el.id], "left");
+    expect(next.compositions[0].elements[0].x).toBe(0);
+  });
+
+  it("aligns multiple elements to their shared bounding box", () => {
+    const elA = { ...createTitleElement(), x: 10, width: 20 };
+    const elB = { ...createSubtitleElement(), x: 50, width: 20 };
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    const next = alignElements(p, "a", [elA.id, elB.id], "left");
+    // bbox left = min(10, 50) = 10 → both elements' x becomes 10.
+    for (const el of next.compositions[0].elements) {
+      expect(el.x).toBe(10);
+    }
+  });
+});
+
+describe("distributeElements", () => {
+  it("spaces out at least 3 elements evenly along an axis", () => {
+    const elA = { ...createTitleElement(), x: 0, width: 10 };
+    const elB = { ...createSubtitleElement(), x: 30, width: 10 };
+    const elC = { ...createShapeElement("rectangle"), x: 80, width: 10 };
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    p = addElementToComposition(p, "a", elC);
+    const next = distributeElements(p, "a", [elA.id, elB.id, elC.id], "horizontal");
+    const byId = new Map(next.compositions[0].elements.map((el) => [el.id, el]));
+    // Span 0..90, total width 30, gap = (90-30)/2 = 30 → x positions 0, 40, 80.
+    expect(byId.get(elA.id)?.x).toBeCloseTo(0);
+    expect(byId.get(elB.id)?.x).toBeCloseTo(40);
+    expect(byId.get(elC.id)?.x).toBeCloseTo(80);
+  });
+
+  it("is a no-op with fewer than 3 elements", () => {
+    const elA = { ...createTitleElement(), x: 0 };
+    const elB = { ...createSubtitleElement(), x: 30 };
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    const next = distributeElements(p, "a", [elA.id, elB.id], "horizontal");
+    expect(next).toEqual(p);
+  });
+});
+
+describe("moveElementToIndex", () => {
+  it("moves an element to an arbitrary z-order index", () => {
+    const elA = createTitleElement();
+    const elB = createSubtitleElement();
+    const elC = createShapeElement("rectangle");
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    p = addElementToComposition(p, "a", elC);
+    const next = moveElementToIndex(p, elC.id, 0);
+    expect(next.compositions[0].elements.map((el) => el.id)).toEqual([elC.id, elA.id, elB.id]);
   });
 });

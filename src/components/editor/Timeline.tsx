@@ -10,7 +10,7 @@ import { startHorizontalDrag } from "../../lib/pointerDrag";
 interface Props {
   project: Project;
   activeCompositionId: string;
-  selectedElementId: string | null;
+  selectedElementIds: string[];
   currentTime: number;
   onSelectComposition: (id: string) => void;
   onSelectElement: (id: string) => void;
@@ -23,6 +23,8 @@ interface Props {
   onSplit: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 const TRACK_TYPES: { type: Element["type"]; labelKey: string; color: string }[] = [
@@ -45,7 +47,7 @@ const COMP_COLORS = ["#5c86ff", "#a45cff", "#2fc4b6", "#ff8a5c", "#38d17a"];
 export default function Timeline({
   project,
   activeCompositionId,
-  selectedElementId,
+  selectedElementIds,
   currentTime,
   onSelectComposition,
   onSelectElement,
@@ -58,6 +60,8 @@ export default function Timeline({
   onSplit,
   onDelete,
   onDuplicate,
+  searchQuery,
+  onSearchChange,
 }: Props) {
   const { t } = useTranslation();
   const lanesRef = useRef<HTMLDivElement>(null);
@@ -115,26 +119,50 @@ export default function Timeline({
   }
 
   const activeComp = project.compositions.find((c) => c.id === activeCompositionId);
+  const query = searchQuery.trim().toLowerCase();
+  const matchesQuery = (name: string) => query === "" || name.toLowerCase().includes(query);
 
   return (
     <section className="editor-timeline">
       <div className="timeline-toolbar">
         <div className="timeline-toolbar-left">
-          <button type="button" className="timeline-action" onClick={onSplit} disabled={!selectedElementId}>
+          <button
+            type="button"
+            className="timeline-action"
+            onClick={onSplit}
+            disabled={selectedElementIds.length !== 1}
+          >
             <Scissors size={13} />
             {t("timeline.split")}
           </button>
-          <button type="button" className="timeline-action" onClick={onDelete} disabled={!selectedElementId}>
+          <button
+            type="button"
+            className="timeline-action"
+            onClick={onDelete}
+            disabled={selectedElementIds.length === 0}
+          >
             <Trash2 size={13} />
             {t("timeline.delete")}
           </button>
-          <button type="button" className="timeline-action" onClick={onDuplicate} disabled={!selectedElementId}>
+          <button
+            type="button"
+            className="timeline-action"
+            onClick={onDuplicate}
+            disabled={selectedElementIds.length === 0}
+          >
             <Copy size={13} />
             {t("timeline.duplicate")}
           </button>
         </div>
         <div className="timeline-toolbar-right">
           <Search size={13} />
+          <input
+            type="text"
+            className="timeline-search"
+            placeholder={t("library.searchPlaceholder")}
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
           <input
             type="range"
             min={15}
@@ -227,7 +255,7 @@ export default function Timeline({
           {TRACK_TYPES.map((trackType) => (
             <div className="timeline-lane" key={trackType.type} onPointerDown={handleRulerPointerDown}>
               {activeComp?.elements
-                .filter((el) => el.type === trackType.type)
+                .filter((el) => el.type === trackType.type && matchesQuery(el.name))
                 .map((el) => {
                   const dur = el.duration ?? activeComp.duration - el.start_time;
                   const left = (activeComp.start_time + el.start_time) * pxPerSec;
@@ -235,7 +263,7 @@ export default function Timeline({
                   return (
                     <div
                       key={el.id}
-                      className={`timeline-clip${selectedElementId === el.id ? " selected" : ""}`}
+                      className={`timeline-clip${selectedElementIds.includes(el.id) ? " selected" : ""}`}
                       style={{ left, width, background: trackType.color }}
                       onPointerDown={(e) => startElementDrag(activeComp, el, "move", e)}
                     >
@@ -251,22 +279,24 @@ export default function Timeline({
           ))}
 
           <div className="timeline-lane" onPointerDown={handleRulerPointerDown}>
-            {project.audio_tracks.map((track) => {
-              const dur = track.duration ?? Math.max(1, project.duration - track.start_time);
-              const left = track.start_time * pxPerSec;
-              const width = Math.max(10, dur * pxPerSec - 2);
-              return (
-                <div
-                  key={track.id}
-                  className={`timeline-clip${selectedElementId === track.id ? " selected" : ""}`}
-                  style={{ left, width, background: "var(--color-audio)" }}
-                  onPointerDown={(e) => startAudioDrag(track, "move", e)}
-                >
-                  <span className="timeline-clip-name">{track.name}</span>
-                  <span className="timeline-clip-resize" onPointerDown={(e) => startAudioDrag(track, "resize", e)} />
-                </div>
-              );
-            })}
+            {project.audio_tracks
+              .filter((track) => matchesQuery(track.name))
+              .map((track) => {
+                const dur = track.duration ?? Math.max(1, project.duration - track.start_time);
+                const left = track.start_time * pxPerSec;
+                const width = Math.max(10, dur * pxPerSec - 2);
+                return (
+                  <div
+                    key={track.id}
+                    className={`timeline-clip${selectedElementIds.includes(track.id) ? " selected" : ""}`}
+                    style={{ left, width, background: "var(--color-audio)" }}
+                    onPointerDown={(e) => startAudioDrag(track, "move", e)}
+                  >
+                    <span className="timeline-clip-name">{track.name}</span>
+                    <span className="timeline-clip-resize" onPointerDown={(e) => startAudioDrag(track, "resize", e)} />
+                  </div>
+                );
+              })}
           </div>
 
           <div className="timeline-playhead" style={{ left: currentTime * pxPerSec }}>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Undo2, Redo2, Maximize2, Minus, Plus, SkipBack, SkipForward, Play, Pause } from "lucide-react";
 import type { Project } from "../../bindings/Project";
@@ -15,7 +15,7 @@ import {
   resolveImagePan,
   transformToCss,
 } from "../../lib/animate";
-import ElementInteraction, { type GeometryPatch } from "./ElementInteraction";
+import ElementInteraction, { type GeometryPatch, type SnapGuides } from "./ElementInteraction";
 import ShapeView from "./ShapeView";
 
 interface Props {
@@ -26,8 +26,9 @@ interface Props {
   playing: boolean;
   onTogglePlay: () => void;
   onSeekToStart: () => void;
-  selectedId: string | null;
-  onSelectElement: (id: string | null) => void;
+  selectedIds: string[];
+  onSelectElement: (id: string | null, additive: boolean) => void;
+  onMarqueeSelect: (ids: string[], additive: boolean) => void;
   onUpdateElement: (elementId: string, patch: Partial<GeometryPatch>) => void;
   onSetTransitionIn: (transitionType: TransitionType | null) => void;
   onSetTransitionOut: (transitionType: TransitionType | null) => void;
@@ -36,6 +37,13 @@ interface Props {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+}
+
+interface MarqueeRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 const ZOOM_MIN = 0.25;
@@ -187,8 +195,9 @@ export default function CanvasStage({
   playing,
   onTogglePlay,
   onSeekToStart,
-  selectedId,
+  selectedIds,
   onSelectElement,
+  onMarqueeSelect,
   onUpdateElement,
   onSetTransitionIn,
   onSetTransitionOut,
@@ -202,6 +211,55 @@ export default function CanvasStage({
   const ratio = `${project.width}/${project.height}`;
   const stageRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
+  const [guides, setGuides] = useState<SnapGuides | null>(null);
+  const [marquee, setMarquee] = useState<MarqueeRect | null>(null);
+
+  function startMarquee(e: ReactPointerEvent, additive: boolean) {
+    const rect = stageRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const startX = ((e.clientX - rect.left) / rect.width) * 100;
+    const startY = ((e.clientY - rect.top) / rect.height) * 100;
+    let current: MarqueeRect = { x: startX, y: startY, width: 0, height: 0 };
+    setMarquee(current);
+
+    function onMove(ev: PointerEvent) {
+      const r = stageRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const x = ((ev.clientX - r.left) / r.width) * 100;
+      const y = ((ev.clientY - r.top) / r.height) * 100;
+      current = {
+        x: Math.min(startX, x),
+        y: Math.min(startY, y),
+        width: Math.abs(x - startX),
+        height: Math.abs(y - startY),
+      };
+      setMarquee(current);
+    }
+
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setMarquee(null);
+      if (current.width < 0.5 && current.height < 0.5) {
+        if (!additive) onSelectElement(null, false);
+        return;
+      }
+      const ids = composition.elements
+        .filter((el) => isElementActive(el, localTime))
+        .filter(
+          (el) =>
+            el.x < current.x + current.width &&
+            el.x + el.width > current.x &&
+            el.y < current.y + current.height &&
+            el.y + el.height > current.y,
+        )
+        .map((el) => el.id);
+      onMarqueeSelect(ids, additive);
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
 
   const compTransitionIn = resolveCompositionTransition(
     composition.transition_in,
@@ -308,7 +366,10 @@ export default function CanvasStage({
               filter: compCss.filter || undefined,
               clipPath: compClipPath || undefined,
             }}
-            onPointerDown={() => onSelectElement(null)}
+            onPointerDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              startMarquee(e, e.shiftKey || e.metaKey || e.ctrlKey);
+            }}
           >
             {composition.elements
               .filter((el) => isElementActive(el, localTime))
@@ -321,15 +382,20 @@ export default function CanvasStage({
                   el.type === "image" || el.type === "video"
                     ? resolveImagePan(el.image_pan, localElementTime, activeDuration)
                     : "";
+                const siblings = composition.elements
+                  .filter((other) => other.id !== el.id)
+                  .map((other) => ({ x: other.x, y: other.y, width: other.width, height: other.height }));
                 return (
                   <ElementInteraction
                     key={el.id}
                     geometry={{ x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation }}
-                    selected={selectedId === el.id}
+                    selected={selectedIds.includes(el.id)}
                     accentColor={ACCENT_BY_TYPE[el.type]}
                     stageRef={stageRef}
-                    onSelect={() => onSelectElement(el.id)}
+                    siblings={siblings}
+                    onSelect={(additive) => onSelectElement(el.id, additive)}
                     onChange={(patch) => onUpdateElement(el.id, patch)}
+                    onGuides={setGuides}
                   >
                     <div
                       style={{
@@ -358,6 +424,23 @@ export default function CanvasStage({
                   </ElementInteraction>
                 );
               })}
+            {guides?.vertical.map((x) => (
+              <div key={`v-${x}`} className="snap-guide snap-guide-v" style={{ left: `${x}%` }} />
+            ))}
+            {guides?.horizontal.map((y) => (
+              <div key={`h-${y}`} className="snap-guide snap-guide-h" style={{ top: `${y}%` }} />
+            ))}
+            {marquee && (
+              <div
+                className="marquee-select"
+                style={{
+                  left: `${marquee.x}%`,
+                  top: `${marquee.y}%`,
+                  width: `${marquee.width}%`,
+                  height: `${marquee.height}%`,
+                }}
+              />
+            )}
           </div>
         </div>
       </div>

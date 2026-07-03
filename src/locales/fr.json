@@ -145,7 +145,20 @@
     "backgroundColorOn": "Activé",
     "backgroundColorOff": "Aucun",
     "borderRadius": "Rayon d'angle",
-    "videoOffset": "Point d'entrée (s)"
+    "videoOffset": "Point d'entrée (s)",
+    "layers": "Calques",
+    "multiSelection": "{{count}} éléments sélectionnés",
+    "multiSelectionHint": "Aligner, distribuer ou modifier ensemble",
+    "align": "Alignement",
+    "alignLeft": "Aligner à gauche",
+    "alignCenterH": "Centrer horizontalement",
+    "alignRight": "Aligner à droite",
+    "alignTop": "Aligner en haut",
+    "alignCenterV": "Centrer verticalement",
+    "alignBottom": "Aligner en bas",
+    "distribute": "Distribution",
+    "distributeH": "Distribuer horizontalement",
+    "distributeV": "Distribuer verticalement"
   },
   "canvas": {
     "undo": "Annuler",

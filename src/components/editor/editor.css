@@ -700,6 +700,55 @@
   bottom: -5px;
   cursor: nesw-resize;
 }
+.element-handle-n {
+  left: 50%;
+  top: -5px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+.element-handle-s {
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+.element-handle-e {
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+.element-handle-w {
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.snap-guide {
+  position: absolute;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 50;
+}
+.snap-guide-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.snap-guide-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.marquee-select {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: rgba(92, 134, 255, 0.12);
+  pointer-events: none;
+  z-index: 40;
+}
 
 .element-rotate-line {
   position: absolute;
@@ -980,6 +1029,56 @@
   flex-shrink: 0;
 }
 
+.layers-panel {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-field-soft);
+}
+
+.layers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.layers-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-field);
+  background: var(--bg-deepest);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.layers-row.selected {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: rgba(92, 134, 255, 0.1);
+}
+.layers-row-icon {
+  display: flex;
+  opacity: 0.8;
+}
+.layers-row-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.layers-row-delete {
+  display: flex;
+  opacity: 0.5;
+  background: none;
+  border: none;
+  color: inherit;
+}
+.layers-row-delete:hover {
+  opacity: 1;
+}
+
 /* Timeline */
 .editor-timeline {
   height: var(--h-timeline);
@@ -1029,6 +1128,20 @@
 
 .timeline-zoom {
   width: 90px;
+}
+
+.timeline-search {
+  width: 130px;
+  padding: 5px 8px;
+  border-radius: var(--radius-field);
+  background: var(--bg-deepest);
+  border: 1px solid var(--border-field-soft);
+  color: var(--text-primary);
+  font-size: 11.5px;
+}
+.timeline-search:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .timeline-body {

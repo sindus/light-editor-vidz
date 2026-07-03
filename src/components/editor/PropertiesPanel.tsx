@@ -10,6 +10,15 @@ import {
   ArrowDown,
   Plus,
   X,
+  Trash2,
+  AlignStartVertical,
+  AlignCenterVertical,
+  AlignEndVertical,
+  AlignStartHorizontal,
+  AlignCenterHorizontal,
+  AlignEndHorizontal,
+  AlignHorizontalSpaceAround,
+  AlignVerticalSpaceAround,
 } from "lucide-react";
 import type { Element } from "../../bindings/Element";
 import type { AudioTrack } from "../../bindings/AudioTrack";
@@ -19,7 +28,7 @@ import type { Easing } from "../../bindings/Easing";
 import type { TextAlign } from "../../bindings/TextAlign";
 import type { VerticalAlign } from "../../bindings/VerticalAlign";
 import type { ImagePanType } from "../../bindings/ImagePanType";
-import type { ElementPatch } from "../../lib/elements";
+import type { ElementPatch, AlignEdge } from "../../lib/elements";
 import ColorPickerField from "./ColorPickerField";
 
 const FIT_MODES = ["cover", "stretch", "fit-largest", "fit-width", "fit-height"] as const;
@@ -225,6 +234,169 @@ interface Props {
   onUpdate: (patch: ElementPatch) => void;
   onUpdateAudio: (patch: Partial<AudioTrack>) => void;
   onReorder: (direction: 1 | -1) => void;
+  elements: Element[];
+  selectedIds: string[];
+  onSelectLayer: (id: string, additive: boolean) => void;
+  onReorderLayer: (id: string, toIndex: number) => void;
+  onDeleteLayer: (id: string) => void;
+  onAlign: (edge: AlignEdge) => void;
+  onDistribute: (axis: "horizontal" | "vertical") => void;
+}
+
+const ICON_BY_TYPE: Record<Element["type"], React.ReactNode> = {
+  text: <Type size={12} />,
+  image: <ImageIcon size={12} />,
+  video: <VideoIcon size={12} />,
+  shape: <Shapes size={12} />,
+};
+
+/** Liste des calques de la composition active (ordre du tableau = z-order), réorganisable par drag. */
+function LayersPanel({
+  elements,
+  selectedIds,
+  onSelectLayer,
+  onReorderLayer,
+  onDeleteLayer,
+}: {
+  elements: Element[];
+  selectedIds: string[];
+  onSelectLayer: Props["onSelectLayer"];
+  onReorderLayer: Props["onReorderLayer"];
+  onDeleteLayer: Props["onDeleteLayer"];
+}) {
+  const { t } = useTranslation();
+  if (elements.length === 0) return null;
+  // Affiché du dessus (dernier du tableau) vers le dessous, comme la plupart des éditeurs.
+  const reversed = [...elements].reverse();
+
+  return (
+    <div className="properties-section layers-panel">
+      <span className="properties-label">{t("properties.layers")}</span>
+      <div className="layers-list">
+        {reversed.map((el, i) => {
+          const layerIndex = elements.length - 1 - i;
+          return (
+            <div
+              key={el.id}
+              className={`layers-row${selectedIds.includes(el.id) ? " selected" : ""}`}
+              draggable
+              onDragStart={(e) => e.dataTransfer.setData("text/layer-id", el.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const draggedId = e.dataTransfer.getData("text/layer-id");
+                if (draggedId) onReorderLayer(draggedId, layerIndex);
+              }}
+              onClick={(e) => onSelectLayer(el.id, e.shiftKey || e.metaKey || e.ctrlKey)}
+            >
+              <span className="layers-row-icon">{ICON_BY_TYPE[el.type]}</span>
+              <span className="layers-row-name">{el.name}</span>
+              <button
+                type="button"
+                className="layers-row-delete"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteLayer(el.id);
+                }}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MultiSelectionProperties({
+  count,
+  onAlign,
+  onDistribute,
+}: {
+  count: number;
+  onAlign: Props["onAlign"];
+  onDistribute: Props["onDistribute"];
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Header
+        color="var(--accent)"
+        icon={<MousePointer2 size={13} />}
+        title={t("properties.multiSelection", { count })}
+        subtitle={t("properties.multiSelectionHint")}
+      />
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.align")}</span>
+        <div className="properties-row">
+          <button type="button" className="icon-btn" onClick={() => onAlign("left")} title={t("properties.alignLeft")}>
+            <AlignStartVertical size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => onAlign("center-h")}
+            title={t("properties.alignCenterH")}
+          >
+            <AlignCenterVertical size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => onAlign("right")}
+            title={t("properties.alignRight")}
+          >
+            <AlignEndVertical size={15} />
+          </button>
+        </div>
+        <div className="properties-row">
+          <button type="button" className="icon-btn" onClick={() => onAlign("top")} title={t("properties.alignTop")}>
+            <AlignStartHorizontal size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => onAlign("center-v")}
+            title={t("properties.alignCenterV")}
+          >
+            <AlignCenterHorizontal size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => onAlign("bottom")}
+            title={t("properties.alignBottom")}
+          >
+            <AlignEndHorizontal size={15} />
+          </button>
+        </div>
+      </div>
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.distribute")}</span>
+        <div className="properties-row">
+          <button
+            type="button"
+            className="icon-btn"
+            disabled={count < 3}
+            onClick={() => onDistribute("horizontal")}
+            title={t("properties.distributeH")}
+          >
+            <AlignHorizontalSpaceAround size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            disabled={count < 3}
+            onClick={() => onDistribute("vertical")}
+            title={t("properties.distributeV")}
+          >
+            <AlignVerticalSpaceAround size={15} />
+          </button>
+        </div>
+      </div>
+    </>
+  );
 }
 
 function AudioProperties({ track, onUpdate }: { track: AudioTrack; onUpdate: Props["onUpdateAudio"] }) {
@@ -602,14 +774,48 @@ function ShapeProperties({
   );
 }
 
-export default function PropertiesPanel({ element, audioTrack, onUpdate, onUpdateAudio, onReorder }: Props) {
+export default function PropertiesPanel({
+  element,
+  audioTrack,
+  onUpdate,
+  onUpdateAudio,
+  onReorder,
+  elements,
+  selectedIds,
+  onSelectLayer,
+  onReorderLayer,
+  onDeleteLayer,
+  onAlign,
+  onDistribute,
+}: Props) {
   const { t } = useTranslation();
+  const layers = (
+    <LayersPanel
+      elements={elements}
+      selectedIds={selectedIds}
+      onSelectLayer={onSelectLayer}
+      onReorderLayer={onReorderLayer}
+      onDeleteLayer={onDeleteLayer}
+    />
+  );
 
   if (audioTrack) {
     return (
       <aside className="editor-properties">
         <div className="properties-content">
           <AudioProperties track={audioTrack} onUpdate={onUpdateAudio} />
+          {layers}
+        </div>
+      </aside>
+    );
+  }
+
+  if (selectedIds.length > 1) {
+    return (
+      <aside className="editor-properties">
+        <div className="properties-content">
+          <MultiSelectionProperties count={selectedIds.length} onAlign={onAlign} onDistribute={onDistribute} />
+          {layers}
         </div>
       </aside>
     );
@@ -626,18 +832,30 @@ export default function PropertiesPanel({ element, audioTrack, onUpdate, onUpdat
             <button type="button" className="icon-btn" onClick={() => onReorder(-1)} title={t("properties.sendBack")}>
               <ArrowDown size={14} />
             </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => onDeleteLayer(element.id)}
+              title={t("timeline.delete")}
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
           {element.type === "text" && <TextProperties element={element} onUpdate={onUpdate} />}
           {(element.type === "image" || element.type === "video") && (
             <MediaProperties element={element} onUpdate={onUpdate} />
           )}
           {element.type === "shape" && <ShapeProperties element={element} onUpdate={onUpdate} />}
+          {layers}
         </div>
       ) : (
-        <div className="properties-empty">
-          <MousePointer2 size={22} color="var(--text-faint)" />
-          <p className="properties-empty-title">{t("properties.empty")}</p>
-          <p className="properties-empty-hint">{t("properties.emptyHint")}</p>
+        <div className="properties-content">
+          <div className="properties-empty">
+            <MousePointer2 size={22} color="var(--text-faint)" />
+            <p className="properties-empty-title">{t("properties.empty")}</p>
+            <p className="properties-empty-hint">{t("properties.emptyHint")}</p>
+          </div>
+          {layers}
         </div>
       )}
     </aside>
