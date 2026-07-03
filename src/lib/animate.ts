@@ -62,11 +62,12 @@ export interface ResolvedTransform {
   dyPct: number;
   scale: number;
   rotateDeg: number;
+  skewDeg: number;
   blurPx: number;
 }
 
 function identity(): ResolvedTransform {
-  return { opacity: 1, dxPct: 0, dyPct: 0, scale: 1, rotateDeg: 0, blurPx: 0 };
+  return { opacity: 1, dxPct: 0, dyPct: 0, scale: 1, rotateDeg: 0, skewDeg: 0, blurPx: 0 };
 }
 
 /** progress: 0 = état caché/décalé, 1 = état final (posé). */
@@ -105,6 +106,14 @@ function shapeFor(type: AnimationType, progress: number): ResolvedTransform {
       return { ...identity(), scale: 0.3 + 0.7 * p };
     case "drop":
       return { ...identity(), opacity: p, dyPct: -(1 - p) * 120 };
+    case "skew-left":
+      return { ...identity(), skewDeg: -20 * (1 - p) };
+    case "skew-right":
+      return { ...identity(), skewDeg: 20 * (1 - p) };
+    case "roll":
+      return { ...identity(), rotateDeg: -360 * (1 - p), dxPct: (1 - p) * 40 };
+    case "spin":
+      return { ...identity(), rotateDeg: -720 * (1 - p), scale: Math.max(0.02, p) };
     default:
       return identity();
   }
@@ -155,6 +164,7 @@ export function resolveElementAnimations(
     acc.dyPct += shape.dyPct;
     acc.scale *= shape.scale;
     acc.rotateDeg += shape.rotateDeg;
+    acc.skewDeg += shape.skewDeg;
     acc.blurPx = Math.max(acc.blurPx, shape.blurPx);
   }
   return acc;
@@ -165,6 +175,7 @@ export function transformToCss(t: ResolvedTransform): { transform: string; filte
   if (t.dxPct || t.dyPct) parts.push(`translate(${t.dxPct}%, ${t.dyPct}%)`);
   if (t.scale !== 1) parts.push(`scale(${t.scale})`);
   if (t.rotateDeg) parts.push(`rotate(${t.rotateDeg}deg)`);
+  if (t.skewDeg) parts.push(`skew(${t.skewDeg}deg)`);
   return {
     transform: parts.join(" "),
     filter: t.blurPx ? `blur(${t.blurPx}px)` : "",
@@ -189,7 +200,16 @@ function transitionShape(type: TransitionType, progress: number): ResolvedTransf
       return { ...identity(), opacity: progress, scale: 0.85 + 0.15 * progress };
     case "blur":
       return { ...identity(), opacity: progress, blurPx: (1 - progress) * 20 };
+    case "flip-h":
+    case "flip-v":
+      return { ...identity(), opacity: progress, scale: Math.max(0.02, progress) };
+    case "rotate-cw":
+      return { ...identity(), opacity: progress, rotateDeg: 360 * (1 - progress) };
+    case "rotate-ccw":
+      return { ...identity(), opacity: progress, rotateDeg: -360 * (1 - progress) };
     default:
+      // Les wipes ne sont pas exprimables via une transform affine : voir
+      // `resolveCompositionWipeClip`, qui calcule un `clip-path` CSS séparé.
       return identity();
   }
 }
@@ -214,6 +234,60 @@ export function resolveCompositionTransition(
   const eased = applyEase(Math.min(1, Math.max(0, raw)), transition.easing);
   const progress = kind === "in" ? eased : 1 - eased;
   return transitionShape(transition.transition_type, progress);
+}
+
+/** Progression (0..1) d'un wipe actif (entrée ou sortie), si la transition en est un. */
+function resolveWipeProgress(
+  transition: Transition | null,
+  kind: "in" | "out",
+  localCompTime: number,
+  compDuration: number,
+): { type: TransitionType; progress: number } | null {
+  if (!transition || !transition.transition_type.startsWith("wipe-")) return null;
+  const duration = Math.max(0.01, transition.duration);
+  let raw: number;
+  if (kind === "in") {
+    if (localCompTime >= duration) return null;
+    raw = localCompTime / duration;
+  } else {
+    const windowStart = compDuration - duration;
+    if (localCompTime <= windowStart) return null;
+    raw = (localCompTime - windowStart) / duration;
+  }
+  const eased = applyEase(Math.min(1, Math.max(0, raw)), transition.easing);
+  const progress = kind === "in" ? eased : 1 - eased;
+  return { type: transition.transition_type, progress };
+}
+
+/**
+ * `clip-path` CSS pour la transition de composition active, si c'est un wipe (balayage à bord
+ * dur) — non exprimable via une transform affine, contrairement aux autres transitions.
+ * Miroir de `wipe_rect` (Rust, `raster.rs`).
+ */
+export function resolveCompositionWipeClip(
+  transitionIn: Transition | null,
+  transitionOut: Transition | null,
+  localCompTime: number,
+  compDuration: number,
+): string {
+  const wipe =
+    resolveWipeProgress(transitionOut, "out", localCompTime, compDuration) ??
+    resolveWipeProgress(transitionIn, "in", localCompTime, compDuration);
+  if (!wipe) return "";
+  const pct = Math.min(1, Math.max(0, wipe.progress)) * 100;
+  const hidden = 100 - pct;
+  switch (wipe.type) {
+    case "wipe-right":
+      return `inset(0 ${hidden}% 0 0)`;
+    case "wipe-left":
+      return `inset(0 0 0 ${hidden}%)`;
+    case "wipe-down":
+      return `inset(0 0 ${hidden}% 0)`;
+    case "wipe-up":
+      return `inset(${hidden}% 0 0 0)`;
+    default:
+      return "";
+  }
 }
 
 /** Ken Burns : transform continu appliqué au média sur toute sa durée active (pas in/out). */

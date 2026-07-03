@@ -1,17 +1,20 @@
 //! Rendu d'une frame (image bitmap) à un instant donné, pour l'export vidéo.
 //!
-//! Le texte est rendu dans un buffer hors-écran puis composé via `draw_pixmap` (même
-//! mécanisme que les images) : rotation et flou (`blur_px`) pleinement supportés pour le
-//! texte. Limitation restante : le flou n'est pas encore appliqué aux formes/images
-//! (seul le texte en bénéficie pour l'instant). Les vidéos utilisent des frames extraites
-//! au préalable par ffmpeg (voir `VideoFrameCache`) ; si l'extraction échoue, un cadre
-//! statique de couleur unie est affiché en repli.
+//! Texte et formes sont rendus dans un buffer hors-écran puis composés via `draw_pixmap` :
+//! rotation, skew et flou (`blur_px`) pleinement supportés pour les deux. Les images/vidéos
+//! sont bloutées directement sur les pixels source avant mise à l'échelle (approximation, voir
+//! `draw_bitmap`). Les vidéos utilisent des frames extraites au préalable par ffmpeg (voir
+//! `VideoFrameCache`) ; si l'extraction échoue, un cadre statique de couleur unie est affiché
+//! en repli (sans flou). Les transitions de type "wipe" ne sont pas des transforms affines :
+//! elles sont appliquées comme un masque de clip rectangulaire (voir `wipe_rect`).
 
 use crate::animate::{
-    resolve_composition_transition, resolve_element_animations, resolve_image_pan,
+    resolve_composition_transition, resolve_element_animations, resolve_image_pan, resolve_wipe,
     ResolvedTransform,
 };
-use crate::model::{AnimationDirection, Composition, Element, FitMode, Project, ShapeType};
+use crate::model::{
+    AnimationDirection, Composition, Element, FitMode, Project, ShapeType, TransitionType,
+};
 use crate::timeline::{is_element_active, resolve_active_composition};
 use cosmic_text::{
     Attrs, Buffer, Color as CosmicColor, Family, FontSystem, Metrics, Shaping, SwashCache, Weight,
@@ -19,7 +22,7 @@ use cosmic_text::{
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, PixmapPaint, Rect, Transform};
+use tiny_skia::{Color, FillRule, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Rect, Transform};
 
 pub struct FrameRenderer {
     font_system: FontSystem,
@@ -89,11 +92,30 @@ fn parse_css_color(s: &str) -> Color {
 fn elem_transform(anim: &ResolvedTransform, cx: f32, cy: f32, w_px: f32, h_px: f32) -> Transform {
     let dx_px = (anim.dx_pct / 100.0) as f32 * w_px;
     let dy_px = (anim.dy_pct / 100.0) as f32 * h_px;
+    let skew_kx = (anim.skew_deg as f32).to_radians().tan();
     Transform::from_translate(-cx, -cy)
+        .post_concat(Transform::from_row(1.0, 0.0, skew_kx, 1.0, 0.0, 0.0))
         .post_scale(anim.scale as f32, anim.scale as f32)
         .post_rotate(anim.rotate_deg as f32)
         .post_translate(cx, cy)
         .post_translate(dx_px, dy_px)
+}
+
+/// Rectangle visible pour un wipe (balayage) donné, selon sa progression (0 = caché, 1 = révélé).
+fn wipe_rect(
+    transition_type: TransitionType,
+    progress: f64,
+    width: f32,
+    height: f32,
+) -> Option<Rect> {
+    let p = progress.clamp(0.0, 1.0) as f32;
+    match transition_type {
+        TransitionType::WipeRight => Rect::from_xywh(0.0, 0.0, width * p, height),
+        TransitionType::WipeLeft => Rect::from_xywh(width * (1.0 - p), 0.0, width * p, height),
+        TransitionType::WipeDown => Rect::from_xywh(0.0, 0.0, width, height * p),
+        TransitionType::WipeUp => Rect::from_xywh(0.0, height * (1.0 - p), width, height * p),
+        _ => None,
+    }
 }
 
 impl Default for FrameRenderer {
@@ -191,6 +213,7 @@ impl FrameRenderer {
                 dy_pct: comp_in.dy_pct + comp_out.dy_pct,
                 scale: comp_in.scale * comp_out.scale,
                 rotate_deg: comp_in.rotate_deg + comp_out.rotate_deg,
+                skew_deg: 0.0,
                 blur_px: 0.0,
             },
             cx,
@@ -198,6 +221,30 @@ impl FrameRenderer {
             width as f32,
             height as f32,
         );
+
+        let wipe = resolve_wipe(
+            composition.transition_out.as_ref(),
+            AnimationDirection::Out,
+            local_time,
+            composition.duration,
+        )
+        .or_else(|| {
+            resolve_wipe(
+                composition.transition_in.as_ref(),
+                AnimationDirection::In,
+                local_time,
+                composition.duration,
+            )
+        });
+        let mask = wipe.and_then(|(transition_type, progress)| {
+            let rect = wipe_rect(transition_type, progress, width as f32, height as f32)?;
+            let mut m = Mask::new(width, height)?;
+            let mut pb = PathBuilder::new();
+            pb.push_rect(rect);
+            let path = pb.finish()?;
+            m.fill_path(&path, FillRule::Winding, true, Transform::identity());
+            Some(m)
+        });
 
         canvas.draw_pixmap(
             0,
@@ -208,7 +255,7 @@ impl FrameRenderer {
                 ..Default::default()
             },
             comp_transform,
-            None,
+            mask.as_ref(),
         );
 
         canvas
@@ -271,6 +318,7 @@ impl FrameRenderer {
                         w_px,
                         h_px,
                         anim.opacity as f32,
+                        anim.blur_px as f32,
                         transform,
                     );
                 }
@@ -290,6 +338,7 @@ impl FrameRenderer {
                             w_px,
                             h_px,
                             anim.opacity as f32,
+                            anim.blur_px as f32,
                             transform,
                             pan,
                         );
@@ -318,6 +367,7 @@ impl FrameRenderer {
                             w_px,
                             h_px,
                             anim.opacity as f32,
+                            anim.blur_px as f32,
                             transform,
                             pan,
                         );
@@ -608,6 +658,9 @@ fn shape_path(
     pb.finish()
 }
 
+/// Rend la forme dans un buffer hors-écran local (coordonnées 0..w/0..h), puis la compose
+/// sur `scene` via `draw_pixmap` + `transform` — même mécanisme que `draw_text`, ce qui
+/// permet d'appliquer un flou avant composition (contrairement à un tracé direct sur `scene`).
 #[allow(clippy::too_many_arguments)] // paramètres de géométrie/style, un refactor en struct serait cosmétique
 fn draw_shape(
     scene: &mut Pixmap,
@@ -617,12 +670,18 @@ fn draw_shape(
     w: f32,
     h: f32,
     opacity: f32,
+    blur_px: f32,
     transform: Transform,
 ) {
+    let layer_w = w.ceil().max(1.0) as u32;
+    let layer_h = h.ceil().max(1.0) as u32;
+    let Some(mut layer) = Pixmap::new(layer_w, layer_h) else {
+        return;
+    };
     let Some(path) = shape_path(
         shape_el.shape_type,
-        x,
-        y,
+        0.0,
+        0.0,
         w,
         h,
         shape_el.border_radius.unwrap_or(0.0) as f32,
@@ -630,24 +689,43 @@ fn draw_shape(
         return;
     };
     let mut paint = Paint::default();
-    let mut color = parse_css_color(&shape_el.fill);
-    color.set_alpha(color.alpha() * opacity);
-    paint.set_color(color);
+    paint.set_color(parse_css_color(&shape_el.fill));
     paint.anti_alias = true;
-    scene.fill_path(&path, &paint, FillRule::Winding, transform, None);
+    layer.fill_path(
+        &path,
+        &paint,
+        FillRule::Winding,
+        Transform::identity(),
+        None,
+    );
 
     if shape_el.stroke != "none" {
         let mut stroke_paint = Paint::default();
-        let mut stroke_color = parse_css_color(&shape_el.stroke);
-        stroke_color.set_alpha(stroke_color.alpha() * opacity);
-        stroke_paint.set_color(stroke_color);
+        stroke_paint.set_color(parse_css_color(&shape_el.stroke));
         stroke_paint.anti_alias = true;
         let stroke = tiny_skia::Stroke {
             width: shape_el.stroke_width as f32,
             ..Default::default()
         };
-        scene.stroke_path(&path, &stroke_paint, &stroke, transform, None);
+        layer.stroke_path(&path, &stroke_paint, &stroke, Transform::identity(), None);
     }
+
+    if blur_px > 0.5 {
+        box_blur(&mut layer, blur_px);
+    }
+
+    let layer_transform = transform.pre_translate(x, y);
+    scene.draw_pixmap(
+        0,
+        0,
+        layer.as_ref(),
+        &PixmapPaint {
+            opacity,
+            ..Default::default()
+        },
+        layer_transform,
+        None,
+    );
 }
 
 #[allow(clippy::too_many_arguments)] // paramètres de géométrie/style, un refactor en struct serait cosmétique
@@ -660,6 +738,7 @@ fn draw_bitmap(
     w: f32,
     h: f32,
     opacity: f32,
+    blur_px: f32,
     transform: Transform,
     pan: (f64, f64, f64),
 ) {
@@ -671,6 +750,12 @@ fn draw_bitmap(
     };
     // `image` fournit du RGBA droit ; tiny-skia attend du prémultiplié.
     premultiply(&mut src);
+    // Approximation : le flou est appliqué aux pixels source avant mise à l'échelle, donc son
+    // intensité perçue varie avec le ratio de scale_x/scale_y (contrairement à draw_shape/draw_text
+    // qui bloutent après composition à la taille finale).
+    if blur_px > 0.5 {
+        box_blur(&mut src, blur_px);
+    }
 
     let (iw, ih) = (img.width() as f32, img.height() as f32);
     let box_ratio = w / h;
@@ -939,6 +1024,101 @@ mod tests {
         assert!(
             blurred > 0 && blurred < 255,
             "le bord doit être adouci, alpha={blurred}"
+        );
+    }
+
+    #[test]
+    fn draw_shape_with_blur_softens_its_edge() {
+        // Le calque hors-écran de `draw_shape` fait exactement la taille de la bbox de la
+        // forme (comme pour `draw_text`) : le flou ne peut donc pas déborder au-delà de cette
+        // bbox lors de la composition, seulement adoucir un bord interne à la forme (ex : le
+        // contour d'un rectangle à coins très arrondis).
+        let shape_el = ShapeElement {
+            base: ElementBase {
+                id: "s1".into(),
+                name: "Rect".into(),
+                start_time: 0.0,
+                duration: None,
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+                rotation: 0.0,
+                animations: vec![],
+            },
+            shape_type: ShapeType::Rectangle,
+            fill: "rgba(255,0,0,1)".into(),
+            stroke: "none".into(),
+            stroke_width: 0.0,
+            border_radius: Some(15.0),
+        };
+
+        let mut sharp = Pixmap::new(40, 40).unwrap();
+        draw_shape(
+            &mut sharp,
+            &shape_el,
+            0.0,
+            0.0,
+            40.0,
+            40.0,
+            1.0,
+            0.0,
+            Transform::identity(),
+        );
+        let mut blurred = Pixmap::new(40, 40).unwrap();
+        draw_shape(
+            &mut blurred,
+            &shape_el,
+            0.0,
+            0.0,
+            40.0,
+            40.0,
+            1.0,
+            20.0,
+            Transform::identity(),
+        );
+
+        // Coin du rectangle arrondi : transparent sans flou, partiellement coloré une fois
+        // flouté (le flou étale la couleur voisine du centre opaque jusque dans le coin).
+        let sharp_corner = sharp.pixel(2, 2).unwrap().alpha();
+        let blurred_corner = blurred.pixel(2, 2).unwrap().alpha();
+        assert_eq!(
+            sharp_corner, 0,
+            "sans flou, le coin arrondi doit rester transparent"
+        );
+        assert!(
+            blurred_corner > 0,
+            "avec flou, le coin doit être partiellement coloré, alpha={blurred_corner}"
+        );
+    }
+
+    #[test]
+    fn wipe_transition_reveals_scene_progressively() {
+        let mut project = sample_project();
+        project.compositions[0].transition_in = Some(Transition {
+            transition_type: TransitionType::WipeRight,
+            duration: 1.0,
+            easing: Easing::Linear,
+        });
+        let mut renderer = FrameRenderer::new();
+        let dir = std::env::temp_dir();
+
+        // Tôt dans le wipe (progress faible) : le rectangle (x∈[32,128] sur 320px) n'est pas
+        // encore révélé au-delà de la frange gauche de l'écran.
+        let early = renderer.render_frame(&project, &dir, 0.05);
+        let early_px = early.pixel(300, 30).unwrap();
+        assert_eq!(
+            (early_px.red(), early_px.green(), early_px.blue()),
+            (0, 0, 0),
+            "le côté droit ne doit pas encore être révélé tôt dans le wipe"
+        );
+
+        // Après la fin du wipe (progress = 1) : toute la scène est révélée, y compris le rectangle.
+        let late = renderer.render_frame(&project, &dir, 2.0);
+        let late_px = late.pixel(60, 30).unwrap();
+        assert!(
+            late_px.red() > 200,
+            "le rectangle doit être révélé une fois le wipe terminé"
         );
     }
 

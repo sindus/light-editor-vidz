@@ -10,6 +10,7 @@ import { assetUrl } from "../../lib/assetUrl";
 import { isElementActive } from "../../lib/timeline";
 import {
   resolveCompositionTransition,
+  resolveCompositionWipeClip,
   resolveElementAnimations,
   resolveImagePan,
   transformToCss,
@@ -53,8 +54,18 @@ const TRANSITION_OPTIONS: { value: TransitionType | ""; labelKey: string }[] = [
   { value: "fade", labelKey: "canvas.transitionFade" },
   { value: "slide-left", labelKey: "canvas.transitionSlideLeft" },
   { value: "slide-right", labelKey: "canvas.transitionSlideRight" },
+  { value: "slide-up", labelKey: "canvas.transitionSlideUp" },
+  { value: "slide-down", labelKey: "canvas.transitionSlideDown" },
   { value: "zoom", labelKey: "canvas.transitionZoom" },
   { value: "blur", labelKey: "canvas.transitionBlur" },
+  { value: "flip-h", labelKey: "canvas.transitionFlipH" },
+  { value: "flip-v", labelKey: "canvas.transitionFlipV" },
+  { value: "rotate-cw", labelKey: "canvas.transitionRotateCw" },
+  { value: "rotate-ccw", labelKey: "canvas.transitionRotateCcw" },
+  { value: "wipe-left", labelKey: "canvas.transitionWipeLeft" },
+  { value: "wipe-right", labelKey: "canvas.transitionWipeRight" },
+  { value: "wipe-up", labelKey: "canvas.transitionWipeUp" },
+  { value: "wipe-down", labelKey: "canvas.transitionWipeDown" },
 ];
 
 function activeDurationOf(el: Element, composition: Composition): number {
@@ -210,8 +221,15 @@ export default function CanvasStage({
     dyPct: compTransitionIn.dyPct + compTransitionOut.dyPct,
     scale: compTransitionIn.scale * compTransitionOut.scale,
     rotateDeg: compTransitionIn.rotateDeg + compTransitionOut.rotateDeg,
+    skewDeg: compTransitionIn.skewDeg + compTransitionOut.skewDeg,
     blurPx: Math.max(compTransitionIn.blurPx, compTransitionOut.blurPx),
   });
+  const compClipPath = resolveCompositionWipeClip(
+    composition.transition_in,
+    composition.transition_out,
+    localTime,
+    composition.duration,
+  );
 
   return (
     <section className="editor-canvas-col">
@@ -288,6 +306,7 @@ export default function CanvasStage({
               transform: compCss.transform || undefined,
               opacity: compCss.opacity,
               filter: compCss.filter || undefined,
+              clipPath: compClipPath || undefined,
             }}
             onPointerDown={() => onSelectElement(null)}
           >

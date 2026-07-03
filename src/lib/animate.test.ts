@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyEase,
   resolveCompositionTransition,
+  resolveCompositionWipeClip,
   resolveElementAnimations,
   resolveImagePan,
   transformToCss,
@@ -31,7 +32,7 @@ describe("applyEase", () => {
 describe("resolveElementAnimations", () => {
   it("returns identity transform when there are no animations", () => {
     const result = resolveElementAnimations([], 1, 5);
-    expect(result).toEqual({ opacity: 1, dxPct: 0, dyPct: 0, scale: 1, rotateDeg: 0, blurPx: 0 });
+    expect(result).toEqual({ opacity: 1, dxPct: 0, dyPct: 0, scale: 1, rotateDeg: 0, skewDeg: 0, blurPx: 0 });
   });
 
   it("fades in from 0 to 1 opacity over the animation duration", () => {
@@ -71,14 +72,22 @@ describe("resolveElementAnimations", () => {
 
 describe("transformToCss", () => {
   it("omits transform/filter properties when there is nothing to apply", () => {
-    const css = transformToCss({ opacity: 1, dxPct: 0, dyPct: 0, scale: 1, rotateDeg: 0, blurPx: 0 });
+    const css = transformToCss({ opacity: 1, dxPct: 0, dyPct: 0, scale: 1, rotateDeg: 0, skewDeg: 0, blurPx: 0 });
     expect(css.transform).toBe("");
     expect(css.filter).toBe("");
     expect(css.opacity).toBe(1);
   });
 
   it("builds a translate/scale/rotate transform string", () => {
-    const css = transformToCss({ opacity: 0.5, dxPct: 10, dyPct: -5, scale: 1.2, rotateDeg: 45, blurPx: 3 });
+    const css = transformToCss({
+      opacity: 0.5,
+      dxPct: 10,
+      dyPct: -5,
+      scale: 1.2,
+      rotateDeg: 45,
+      skewDeg: 0,
+      blurPx: 3,
+    });
     expect(css.transform).toContain("translate(10%, -5%)");
     expect(css.transform).toContain("scale(1.2)");
     expect(css.transform).toContain("rotate(45deg)");
@@ -94,6 +103,7 @@ describe("resolveCompositionTransition", () => {
       dyPct: 0,
       scale: 1,
       rotateDeg: 0,
+      skewDeg: 0,
       blurPx: 0,
     });
   });
@@ -113,5 +123,44 @@ describe("resolveImagePan (Ken Burns)", () => {
   it("produces a scale transform for zoom-in", () => {
     const css = resolveImagePan({ pan_type: "zoomIn", intensity: 1 }, 0, 5);
     expect(css).toContain("scale(");
+  });
+});
+
+describe("newly implemented animation types (skew/roll/spin)", () => {
+  it("skew-left produces a non-zero skew mid-animation that settles to zero", () => {
+    const anims: Animation[] = [
+      { animation_type: "skew-left", direction: "in", duration: 1, easing: "linear", with_fade: false },
+    ];
+    expect(resolveElementAnimations(anims, 0.5, 2).skewDeg).not.toBe(0);
+    expect(resolveElementAnimations(anims, 2, 2).skewDeg).toBe(0);
+  });
+
+  it("roll and spin rotate mid-animation and settle to no rotation", () => {
+    for (const type of ["roll", "spin"] as const) {
+      const anims: Animation[] = [
+        { animation_type: type, direction: "in", duration: 1, easing: "linear", with_fade: false },
+      ];
+      expect(resolveElementAnimations(anims, 0.5, 2).rotateDeg).not.toBe(0);
+      expect(resolveElementAnimations(anims, 2, 2).rotateDeg).toBe(0);
+    }
+  });
+});
+
+describe("newly implemented transition types (flip/rotate/wipe)", () => {
+  it("flip and rotate transitions differ from identity mid-transition", () => {
+    for (const type of ["flip-h", "flip-v", "rotate-cw", "rotate-ccw"] as const) {
+      const transition: Transition = { transition_type: type, duration: 1, easing: "linear" };
+      const mid = resolveCompositionTransition(transition, "in", 0.5, 2);
+      expect(mid.rotateDeg !== 0 || mid.scale !== 1).toBe(true);
+    }
+  });
+
+  it("resolveCompositionWipeClip returns a clip-path only for wipe transitions", () => {
+    const wipe: Transition = { transition_type: "wipe-right", duration: 1, easing: "linear" };
+    expect(resolveCompositionWipeClip(wipe, null, 0.5, 2)).toContain("inset(");
+
+    const fade: Transition = { transition_type: "fade", duration: 1, easing: "linear" };
+    expect(resolveCompositionWipeClip(fade, null, 0.5, 2)).toBe("");
+    expect(resolveCompositionWipeClip(null, null, 0.5, 2)).toBe("");
   });
 });

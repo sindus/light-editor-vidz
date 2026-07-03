@@ -70,6 +70,7 @@ pub struct ResolvedTransform {
     pub dy_pct: f64,
     pub scale: f64,
     pub rotate_deg: f64,
+    pub skew_deg: f64,
     pub blur_px: f64,
 }
 
@@ -81,6 +82,7 @@ impl Default for ResolvedTransform {
             dy_pct: 0.0,
             scale: 1.0,
             rotate_deg: 0.0,
+            skew_deg: 0.0,
             blur_px: 0.0,
         }
     }
@@ -155,6 +157,24 @@ fn shape_for(anim_type: AnimationType, p: f64) -> ResolvedTransform {
             dy_pct: -(1.0 - p) * 120.0,
             ..id
         },
+        AnimationType::SkewLeft => ResolvedTransform {
+            skew_deg: -20.0 * (1.0 - p),
+            ..id
+        },
+        AnimationType::SkewRight => ResolvedTransform {
+            skew_deg: 20.0 * (1.0 - p),
+            ..id
+        },
+        AnimationType::Roll => ResolvedTransform {
+            rotate_deg: -360.0 * (1.0 - p),
+            dx_pct: (1.0 - p) * 40.0,
+            ..id
+        },
+        AnimationType::Spin => ResolvedTransform {
+            rotate_deg: -720.0 * (1.0 - p),
+            scale: p.max(0.02),
+            ..id
+        },
         _ => id,
     }
 }
@@ -218,6 +238,7 @@ pub fn resolve_element_animations(
         acc.dy_pct += shape.dy_pct;
         acc.scale *= shape.scale;
         acc.rotate_deg += shape.rotate_deg;
+        acc.skew_deg += shape.skew_deg;
         acc.blur_px = acc.blur_px.max(shape.blur_px);
     }
     acc
@@ -256,8 +277,69 @@ fn transition_shape(transition_type: TransitionType, progress: f64) -> ResolvedT
             blur_px: (1.0 - progress) * 20.0,
             ..id
         },
+        TransitionType::FlipH | TransitionType::FlipV => ResolvedTransform {
+            opacity: progress,
+            scale: progress.max(0.02),
+            ..id
+        },
+        TransitionType::RotateCw => ResolvedTransform {
+            opacity: progress,
+            rotate_deg: 360.0 * (1.0 - progress),
+            ..id
+        },
+        TransitionType::RotateCcw => ResolvedTransform {
+            opacity: progress,
+            rotate_deg: -360.0 * (1.0 - progress),
+            ..id
+        },
+        // Les wipes ne sont pas exprimables via une transform affine : ils sont résolus
+        // séparément par `resolve_wipe` et appliqués comme un masque de clip (voir raster.rs).
         _ => id,
     }
+}
+
+/// Progression (0..1) et type de wipe actif pour la transition donnée, si c'en est un.
+/// Les wipes (balayage à bord dur) ne peuvent pas s'exprimer via `ResolvedTransform` (une
+/// transform affine) : ils sont appliqués comme un masque de clip rectangulaire côté rendu.
+pub fn resolve_wipe(
+    transition: Option<&Transition>,
+    kind: AnimationDirection,
+    local_comp_time: f64,
+    comp_duration: f64,
+) -> Option<(TransitionType, f64)> {
+    let transition = transition?;
+    let is_wipe = matches!(
+        transition.transition_type,
+        TransitionType::WipeLeft
+            | TransitionType::WipeRight
+            | TransitionType::WipeUp
+            | TransitionType::WipeDown
+    );
+    if !is_wipe {
+        return None;
+    }
+    let duration = transition.duration.max(0.01);
+    let raw = match kind {
+        AnimationDirection::In => {
+            if local_comp_time >= duration {
+                return None;
+            }
+            local_comp_time / duration
+        }
+        AnimationDirection::Out => {
+            let window_start = comp_duration - duration;
+            if local_comp_time <= window_start {
+                return None;
+            }
+            (local_comp_time - window_start) / duration
+        }
+    };
+    let eased = apply_ease(raw.clamp(0.0, 1.0), transition.easing);
+    let progress = match kind {
+        AnimationDirection::In => eased,
+        AnimationDirection::Out => 1.0 - eased,
+    };
+    Some((transition.transition_type, progress))
 }
 
 pub fn resolve_composition_transition(
@@ -316,5 +398,91 @@ pub fn resolve_image_pan(
         ImagePanType::PanRight => (1.0 + i * 0.15, -i * 8.0 * (1.0 - 2.0 * progress), 0.0),
         ImagePanType::PanUp => (1.0 + i * 0.15, 0.0, i * 8.0 * (1.0 - 2.0 * progress)),
         ImagePanType::PanDown => (1.0 + i * 0.15, 0.0, -i * 8.0 * (1.0 - 2.0 * progress)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn anim(animation_type: AnimationType, direction: AnimationDirection) -> Animation {
+        Animation {
+            animation_type,
+            direction,
+            duration: 1.0,
+            easing: Easing::Linear,
+            with_fade: false,
+        }
+    }
+
+    #[test]
+    fn skew_animations_produce_a_non_zero_skew_that_settles_to_zero() {
+        let mid = resolve_element_animations(
+            &[anim(AnimationType::SkewLeft, AnimationDirection::In)],
+            0.5,
+            2.0,
+        );
+        assert_ne!(mid.skew_deg, 0.0);
+        let settled = resolve_element_animations(
+            &[anim(AnimationType::SkewLeft, AnimationDirection::In)],
+            2.0,
+            2.0,
+        );
+        assert_eq!(settled.skew_deg, 0.0);
+    }
+
+    #[test]
+    fn roll_and_spin_rotate_and_settle() {
+        for t in [AnimationType::Roll, AnimationType::Spin] {
+            let mid = resolve_element_animations(&[anim(t, AnimationDirection::In)], 0.5, 2.0);
+            assert_ne!(mid.rotate_deg, 0.0, "{t:?} should rotate mid-animation");
+            let settled = resolve_element_animations(&[anim(t, AnimationDirection::In)], 2.0, 2.0);
+            assert_eq!(
+                settled.rotate_deg, 0.0,
+                "{t:?} should settle to no rotation"
+            );
+        }
+    }
+
+    #[test]
+    fn flip_and_rotate_transitions_are_no_longer_identity() {
+        for t in [
+            TransitionType::FlipH,
+            TransitionType::FlipV,
+            TransitionType::RotateCw,
+            TransitionType::RotateCcw,
+        ] {
+            let transition = Transition {
+                transition_type: t,
+                duration: 1.0,
+                easing: Easing::Linear,
+            };
+            let shape =
+                resolve_composition_transition(Some(&transition), AnimationDirection::In, 0.5, 2.0);
+            let id = ResolvedTransform::default();
+            assert!(
+                shape.rotate_deg != id.rotate_deg || shape.scale != id.scale,
+                "{t:?} mid-transition should differ from identity"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_wipe_only_matches_wipe_transitions() {
+        let wipe = Transition {
+            transition_type: TransitionType::WipeLeft,
+            duration: 1.0,
+            easing: Easing::Linear,
+        };
+        let result = resolve_wipe(Some(&wipe), AnimationDirection::In, 0.5, 2.0);
+        assert!(matches!(result, Some((TransitionType::WipeLeft, p)) if p > 0.0 && p < 1.0));
+
+        let fade = Transition {
+            transition_type: TransitionType::Fade,
+            duration: 1.0,
+            easing: Easing::Linear,
+        };
+        assert!(resolve_wipe(Some(&fade), AnimationDirection::In, 0.5, 2.0).is_none());
+        assert!(resolve_wipe(None, AnimationDirection::In, 0.5, 2.0).is_none());
     }
 }

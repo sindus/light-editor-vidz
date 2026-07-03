@@ -27,12 +27,24 @@ const FIT_MODES = ["cover", "stretch", "fit-largest", "fit-width", "fit-height"]
 const ANIMATION_OPTIONS: { type: AnimationType; labelKey: string }[] = [
   { type: "fade", labelKey: "properties.animFade" },
   { type: "slide-left", labelKey: "properties.animSlideLeft" },
+  { type: "slide-right", labelKey: "properties.animSlideRight" },
   { type: "slide-up", labelKey: "properties.animSlideUp" },
+  { type: "slide-down", labelKey: "properties.animSlideDown" },
+  { type: "fade-left", labelKey: "properties.animFadeLeft" },
+  { type: "fade-right", labelKey: "properties.animFadeRight" },
+  { type: "fade-up", labelKey: "properties.animFadeUp" },
+  { type: "fade-down", labelKey: "properties.animFadeDown" },
   { type: "zoom-in", labelKey: "properties.animZoomIn" },
   { type: "zoom-out", labelKey: "properties.animZoomOut" },
   { type: "rotate", labelKey: "properties.animRotate" },
+  { type: "flip", labelKey: "properties.animFlip" },
   { type: "blur", labelKey: "properties.animBlur" },
   { type: "bounce", labelKey: "properties.animBounce" },
+  { type: "drop", labelKey: "properties.animDrop" },
+  { type: "skew-left", labelKey: "properties.animSkewLeft" },
+  { type: "skew-right", labelKey: "properties.animSkewRight" },
+  { type: "roll", labelKey: "properties.animRoll" },
+  { type: "spin", labelKey: "properties.animSpin" },
 ];
 
 const EASING_OPTIONS: { value: Easing; labelKey: string }[] = [
