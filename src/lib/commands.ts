@@ -50,9 +50,21 @@ export function listAssets(projectDir: string, kind: AssetKind): Promise<AssetIn
   return invoke("list_assets", { projectDir, kind });
 }
 
+export interface ExportOptions {
+  width: number | null;
+  height: number | null;
+  fps: number | null;
+  crf: number | null;
+}
+
 /** Exporte le projet en mp4 (bloquant côté Rust — ffmpeg doit être installé). */
-export function exportProject(projectDir: string, project: Project, outputPath: string): Promise<void> {
-  return invoke("export_project", { projectDir, project, outputPath });
+export function exportProject(
+  projectDir: string,
+  project: Project,
+  outputPath: string,
+  options: ExportOptions,
+): Promise<void> {
+  return invoke("export_project", { projectDir, project, outputPath, options });
 }
 
 export function readTextFile(path: string): Promise<string> {

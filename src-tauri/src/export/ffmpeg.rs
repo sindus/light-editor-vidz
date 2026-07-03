@@ -13,27 +13,40 @@ pub struct VideoEncoder {
 
 impl VideoEncoder {
     /// Démarre un process ffmpeg qui lit des frames RGBA brutes sur stdin et encode en h264/mp4.
-    pub fn start(width: u32, height: u32, fps: u32, output_path: &Path) -> Result<Self, String> {
+    /// `crf` (0-51, x264) surcharge le contrôle de qualité par défaut du `-preset medium` si fourni.
+    pub fn start(
+        width: u32,
+        height: u32,
+        fps: u32,
+        crf: Option<u32>,
+        output_path: &Path,
+    ) -> Result<Self, String> {
+        let mut args = vec![
+            "-y".to_string(),
+            "-f".to_string(),
+            "rawvideo".to_string(),
+            "-pixel_format".to_string(),
+            "rgba".to_string(),
+            "-video_size".to_string(),
+            format!("{width}x{height}"),
+            "-framerate".to_string(),
+            fps.to_string(),
+            "-i".to_string(),
+            "pipe:0".to_string(),
+            "-c:v".to_string(),
+            "libx264".to_string(),
+            "-preset".to_string(),
+            "medium".to_string(),
+        ];
+        if let Some(crf) = crf {
+            args.push("-crf".to_string());
+            args.push(crf.clamp(0, 51).to_string());
+        }
+        args.push("-pix_fmt".to_string());
+        args.push("yuv420p".to_string());
+
         let child = Command::new(ffmpeg_binary())
-            .args([
-                "-y",
-                "-f",
-                "rawvideo",
-                "-pixel_format",
-                "rgba",
-                "-video_size",
-                &format!("{width}x{height}"),
-                "-framerate",
-                &fps.to_string(),
-                "-i",
-                "pipe:0",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "medium",
-                "-pix_fmt",
-                "yuv420p",
-            ])
+            .args(&args)
             .arg(output_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())

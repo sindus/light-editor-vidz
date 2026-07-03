@@ -84,7 +84,8 @@ pub struct TextElement {
     pub color: String,
     pub background_color: Option<String>,
     /// Exprimé en `cqw` (% de la largeur du canvas) pour rester proportionnel quelle
-    /// que soit la résolution du projet. None = taille automatique (auto-fit, Phase 5+).
+    /// que soit la résolution du projet. None = taille automatique (auto-fit : la plus grande
+    /// taille qui tient dans la boîte, voir `raster::FrameRenderer::autofit_font_size_px`).
     pub font_size: Option<f64>,
     pub font_family: Option<String>,
     pub font_weight: Option<FontWeight>,

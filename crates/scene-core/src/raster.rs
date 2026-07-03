@@ -416,6 +416,68 @@ impl FrameRenderer {
         }
     }
 
+    /// `font_size: None` (auto-fit) : vrai si le texte, une fois mis en page à `font_size_px`
+    /// (retour à la ligne automatique sur `w_px`), tient dans `h_px` sans déborder.
+    fn text_fits_at_size(
+        &mut self,
+        text_el: &crate::model::TextElement,
+        font_size_px: f32,
+        w_px: f32,
+        h_px: f32,
+    ) -> bool {
+        let line_height_px = font_size_px * 1.25 * text_el.line_height.unwrap_or(1.0) as f32;
+        let metrics = Metrics::new(font_size_px, line_height_px);
+        let mut buffer = Buffer::new(&mut self.font_system, metrics);
+        buffer.set_size(Some(w_px), Some(h_px));
+        let weight = if text_el.font_weight == Some(crate::model::FontWeight::Bold) {
+            Weight::BOLD
+        } else {
+            Weight::NORMAL
+        };
+        let family = text_el
+            .font_family
+            .as_deref()
+            .map(Family::Name)
+            .unwrap_or(Family::SansSerif);
+        let attrs = Attrs::new().family(family).weight(weight);
+        buffer.set_text(&text_el.content, &attrs, Shaping::Advanced, None);
+        buffer.shape_until_scroll(&mut self.font_system, false);
+
+        let total_height = buffer.layout_runs().count() as f32 * line_height_px;
+        if total_height > h_px + 0.5 {
+            return false;
+        }
+        buffer
+            .layout_runs()
+            .all(|run| run.glyphs.iter().map(|g| g.w).sum::<f32>() <= w_px + 0.5)
+    }
+
+    /// Recherche par dichotomie la plus grande taille de police (px) qui tient dans la boîte
+    /// `w_px`×`h_px` — implémente `font_size: None` (auto-fit, "Phase 5+" dans le modèle).
+    fn autofit_font_size_px(
+        &mut self,
+        text_el: &crate::model::TextElement,
+        w_px: f32,
+        h_px: f32,
+    ) -> f32 {
+        let mut lo = 2.0f32;
+        let mut hi = h_px.max(lo + 1.0);
+        if !self.text_fits_at_size(text_el, lo, w_px, h_px) {
+            // Même la taille minimale déborde (boîte trop petite / contenu trop long) : on
+            // reste sur ce plancher plutôt que de produire un texte invisible (taille 0).
+            return lo;
+        }
+        for _ in 0..10 {
+            let mid = (lo + hi) / 2.0;
+            if self.text_fits_at_size(text_el, mid, w_px, h_px) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        lo
+    }
+
     /// Rend le texte dans un buffer hors-écran local (coordonnées 0..w_px/0..h_px), puis le
     /// compose sur `scene` via `draw_pixmap` + `transform` — même mécanisme que les images
     /// (`draw_bitmap`). Contrairement à un mapping direct pixel-par-pixel, ceci supporte
@@ -441,7 +503,10 @@ impl FrameRenderer {
             return;
         };
 
-        let font_size_px = (text_el.font_size.unwrap_or(4.0) / 100.0) as f32 * scene.width() as f32;
+        let font_size_px = match text_el.font_size {
+            Some(fs) => (fs / 100.0) as f32 * scene.width() as f32,
+            None => self.autofit_font_size_px(text_el, w_px, h_px),
+        };
         let line_height_px = font_size_px * 1.25 * text_el.line_height.unwrap_or(1.0) as f32;
         let metrics = Metrics::new(font_size_px, line_height_px);
         let mut buffer = Buffer::new(&mut self.font_system, metrics);
@@ -1167,6 +1232,49 @@ mod tests {
             found_glyph_pixel,
             "aucun pixel de glyphe détecté dans la zone du texte"
         );
+    }
+
+    #[test]
+    fn autofit_font_size_shrinks_for_smaller_boxes() {
+        let text_el = TextElement {
+            base: ElementBase {
+                id: "t1".into(),
+                name: "Titre".into(),
+                start_time: 0.0,
+                duration: None,
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+                rotation: 0.0,
+                animations: vec![],
+                group_id: None,
+                blend_mode: None,
+            },
+            content: "Bonjour tout le monde".into(),
+            alignment: TextAlign::Left,
+            vertical_alignment: VerticalAlign::Top,
+            color: "rgba(255,255,255,1)".into(),
+            background_color: None,
+            font_size: None,
+            font_family: None,
+            font_weight: None,
+            font_style: None,
+            letter_spacing: None,
+            line_height: None,
+            text_shadow: None,
+            underline: false,
+            strikethrough: false,
+        };
+        let mut renderer = FrameRenderer::new();
+
+        let large = renderer.autofit_font_size_px(&text_el, 400.0, 400.0);
+        let small = renderer.autofit_font_size_px(&text_el, 80.0, 40.0);
+        assert!(
+            large > small,
+            "une boîte plus petite doit produire une taille de police plus petite (large={large}, small={small})"
+        );
+        assert!(renderer.text_fits_at_size(&text_el, small, 80.0, 40.0));
     }
 
     #[test]

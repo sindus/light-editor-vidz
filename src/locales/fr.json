@@ -64,8 +64,7 @@
     "styleBox": "Boîte",
     "styleSpaced": "SPACÉ",
     "import": "Importer",
-    "importAudio": "Importer un fichier audio",
-    "recordVoiceOver": "Voix off (Enregistrer…)"
+    "importAudio": "Importer un fichier audio"
   },
   "shapes": {
     "rectangle": "Rectangle",
@@ -226,6 +225,19 @@
     "duplicate": "Dupliquer",
     "addScene": "Ajouter une scène",
     "overlap": "Chevauchement en fondu-enchaîné avec la scène suivante (s)"
+  },
+  "exportModal": {
+    "title": "Exporter la vidéo",
+    "subtitle": "Réglages du projet : {{width}}×{{height}} · {{fps}}fps",
+    "resolution": "Résolution",
+    "resolutionOriginal": "Originale",
+    "fps": "Cadence",
+    "fpsOriginal": "Originale",
+    "quality": "Qualité",
+    "qualityHigh": "Haute",
+    "qualityMedium": "Moyenne",
+    "qualityLow": "Basse",
+    "confirm": "Exporter"
   },
   "common": {
     "back": "Retour",

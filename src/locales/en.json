@@ -64,8 +64,7 @@
     "styleBox": "Box",
     "styleSpaced": "SPACED",
     "import": "Import",
-    "importAudio": "Import an audio file",
-    "recordVoiceOver": "Voice-over (Record…)"
+    "importAudio": "Import an audio file"
   },
   "shapes": {
     "rectangle": "Rectangle",
@@ -226,6 +225,19 @@
     "duplicate": "Duplicate",
     "addScene": "Add a scene",
     "overlap": "Crossfade overlap with next scene (s)"
+  },
+  "exportModal": {
+    "title": "Export video",
+    "subtitle": "Project settings: {{width}}×{{height}} · {{fps}}fps",
+    "resolution": "Resolution",
+    "resolutionOriginal": "Original",
+    "fps": "Frame rate",
+    "fpsOriginal": "Original",
+    "quality": "Quality",
+    "qualityHigh": "High",
+    "qualityMedium": "Medium",
+    "qualityLow": "Low",
+    "confirm": "Export"
   },
   "common": {
     "back": "Back",

@@ -5,9 +5,10 @@ import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { Play, Download, Upload } from "lucide-react";
 import type { Project } from "../../bindings/Project";
-import { exportProject } from "../../lib/commands";
+import { exportProject, type ExportOptions } from "../../lib/commands";
 import AppMenu from "./AppMenu";
 import UpdateStatus from "./UpdateStatus";
+import ExportModal from "./ExportModal";
 
 interface Props {
   project: Project;
@@ -47,6 +48,7 @@ export default function TopBar({
   const [exportProgress, setExportProgress] = useState(0);
   const [exportError, setExportError] = useState<string | null>(null);
   const [version, setVersion] = useState("");
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     getVersion()
@@ -61,7 +63,7 @@ export default function TopBar({
     };
   }, []);
 
-  async function handleExport() {
+  async function handleExport(options: ExportOptions) {
     setExportError(null);
     const defaultName = `${project.name.trim() || "video"}.mp4`;
     const outputPath = await save({
@@ -73,7 +75,8 @@ export default function TopBar({
     setExporting(true);
     setExportProgress(0);
     try {
-      await exportProject(projectDir, project, outputPath);
+      await exportProject(projectDir, project, outputPath, options);
+      setShowExportModal(false);
     } catch (e) {
       setExportError(String(e));
     } finally {
@@ -102,7 +105,7 @@ export default function TopBar({
               { label: t("topbar.importLegacy"), onClick: onImportLegacy },
               "separator",
               { label: t("topbar.save"), onClick: onSave, shortcut: "Ctrl+S" },
-              { label: t("topbar.exportEllipsis"), onClick: handleExport },
+              { label: t("topbar.exportEllipsis"), onClick: () => setShowExportModal(true) },
             ]}
           />
           <AppMenu
@@ -148,7 +151,12 @@ export default function TopBar({
           <Download size={14} />
           {saving ? t("topbar.saving") : t("topbar.save")}
         </button>
-        <button type="button" className="btn-topbar-primary" onClick={handleExport} disabled={exporting}>
+        <button
+          type="button"
+          className="btn-topbar-primary"
+          onClick={() => setShowExportModal(true)}
+          disabled={exporting}
+        >
           <Upload size={14} />
           {exporting ? `${t("topbar.exporting")} ${Math.round(exportProgress * 100)}%` : t("topbar.export")}
         </button>
@@ -157,6 +165,16 @@ export default function TopBar({
         <div className="export-progress-bar">
           <div className="export-progress-fill" style={{ width: `${exportProgress * 100}%` }} />
         </div>
+      )}
+      {showExportModal && (
+        <ExportModal
+          projectWidth={project.width}
+          projectHeight={project.height}
+          projectFps={project.fps}
+          onExport={handleExport}
+          onClose={() => setShowExportModal(false)}
+          exporting={exporting}
+        />
       )}
     </header>
   );
