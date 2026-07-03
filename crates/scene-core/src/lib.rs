@@ -1,5 +1,6 @@
-//! Modèle de scène et moteur de résolution, partagé entre la preview (wasm) et l'export (natif).
-//! Modules ajoutés au fil des phases : model, timeline, project, animate, raster (export), wasm (à venir).
+//! Modèle de scène et moteur de résolution. `model`/`timeline`/`project` sont partagés
+//! (bindings TS générés via ts-rs) ; `animate` est porté (dupliqué, volontairement) côté
+//! TS pour la preview temps réel — voir la doc de ce module ; `raster` est natif (export mp4).
 
 pub mod animate;
 pub mod ffmpeg_path;

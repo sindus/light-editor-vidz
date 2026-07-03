@@ -6,8 +6,9 @@ import type { TransitionType } from "../bindings/TransitionType";
 const DEFAULT_COMPOSITION_DURATION = 5;
 
 /**
- * Port TS de `scene-core::timeline::recompute_start_times` (Rust). Doit rester en
- * synchro avec la version Rust jusqu'à l'introduction d'un pont wasm partagé (Phase 7+).
+ * Port TS de `scene-core::timeline::recompute_start_times` (Rust) — duplication assumée, voir
+ * la doc de `crates/scene-core/src/animate.rs`. Validé contre la même implémentation Rust par
+ * `timelineGolden.test.ts` (fixture partagée `fixtures/animation-golden.json`).
  */
 export function recomputeStartTimes(project: Project): Project {
   let cursor = 0;

@@ -286,8 +286,10 @@ export function resolveCompositionTransition(
   return transitionShape(transition.transition_type, progress);
 }
 
-/** Progression (0..1) d'un wipe actif (entrée ou sortie), si la transition en est un. */
-function resolveWipeProgress(
+/** Progression (0..1) d'un wipe actif (entrée ou sortie), si la transition en est un. Miroir
+ * de `resolve_wipe` (Rust, `animate.rs`) — exporté pour le test de parité croisée
+ * (`animateGolden.test.ts`), sinon utilisé uniquement en interne par `resolveCompositionWipeClip`. */
+export function resolveWipeProgress(
   transition: Transition | null,
   kind: "in" | "out",
   localCompTime: number,

@@ -1,5 +1,12 @@
-//! Résolution d'animation pour l'export (rendu natif). Port Rust de `src/lib/animate.ts` —
-//! les deux doivent rester en synchro jusqu'à l'unification via un pont wasm partagé.
+//! Résolution d'animation pour l'export (rendu natif). Port Rust de `src/lib/animate.ts`.
+//!
+//! Duplication assumée (pas de pont wasm) : ce calcul est appelé à chaque frame pour chaque
+//! élément pendant la preview temps réel, où le coût de sérialisation JSON d'un pont wasm
+//! dépasserait le gain (le calcul lui-même est trivial). Le risque réel de la duplication —
+//! une divergence silencieuse entre les deux implémentations — est couvert par
+//! `crates/scene-core/tests/golden_fixture.rs` et `src/lib/animateGolden.test.ts`, qui
+//! valident les deux implémentations contre la même fixture de référence
+//! (`fixtures/animation-golden.json`).
 
 use crate::model::{
     Animation, AnimationDirection, AnimationType, Easing, ImagePan, ImagePanType, Transition,
@@ -63,7 +70,7 @@ pub fn apply_ease(t: f64, easing: Easing) -> f64 {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize)]
 pub struct ResolvedTransform {
     pub opacity: f64,
     pub dx_pct: f64,

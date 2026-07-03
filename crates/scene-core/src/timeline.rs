@@ -23,7 +23,9 @@ pub fn recompute_start_times(project: &mut Project) {
 }
 
 /// Composition active à l'instant global `t`, avec le temps local (relatif à son début).
-/// Port Rust de `src/lib/timeline.ts::resolveActiveComposition` (doit rester en synchro).
+/// Port Rust de `src/lib/timeline.ts::resolveActiveComposition` — duplication assumée, voir la
+/// doc de `crate::animate`. `recompute_start_times` est validé contre son port TS par
+/// `crates/scene-core/tests/golden_fixture.rs` + `src/lib/timelineGolden.test.ts`.
 pub fn resolve_active_composition(project: &Project, t: f64) -> Option<(&Composition, f64)> {
     for comp in &project.compositions {
         if t >= comp.start_time && t < comp.start_time + comp.duration {
