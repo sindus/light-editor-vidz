@@ -940,6 +940,46 @@
   color: var(--text-primary);
 }
 
+.properties-row-header {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.animation-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius-field);
+  background: var(--bg-deepest);
+  border: 1px solid var(--border-field-soft);
+}
+
+.color-picker-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.color-picker-native {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--border-field-soft);
+  background: transparent;
+  cursor: pointer;
+}
+
+.color-picker-hex {
+  flex: 1;
+}
+
+.color-picker-alpha {
+  width: 70px;
+  flex-shrink: 0;
+}
+
 /* Timeline */
 .editor-timeline {
   height: var(--h-timeline);
@@ -1096,6 +1136,21 @@
   bottom: 0;
   width: 6px;
   cursor: ew-resize;
+}
+
+.timeline-scene-overlap {
+  position: absolute;
+  right: 8px;
+  top: 2px;
+  width: 30px;
+  height: 16px;
+  font-size: 9px;
+  padding: 0 2px;
+  border-radius: 3px;
+  border: 1px solid var(--border-field-soft);
+  background: var(--bg-deepest);
+  color: var(--text-primary);
+  cursor: default;
 }
 
 .timeline-add-scene {

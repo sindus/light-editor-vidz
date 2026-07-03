@@ -63,6 +63,42 @@ export function setCompositionTransitionIn(
   };
 }
 
+export function setCompositionTransitionOut(
+  project: Project,
+  compId: string,
+  transitionType: TransitionType | null,
+): Project {
+  return {
+    ...project,
+    compositions: project.compositions.map((c) =>
+      c.id === compId
+        ? {
+            ...c,
+            transition_out: transitionType
+              ? { transition_type: transitionType, duration: 0.6, easing: "power2-in-out" }
+              : null,
+          }
+        : c,
+    ),
+  };
+}
+
+const MIN_OVERLAP_GAP = 0.1;
+
+/** Chevauchement (secondes) avec la composition suivante, pour un fondu-enchaîné entre scènes. */
+export function setCompositionOverlap(project: Project, compId: string, overlap: number): Project {
+  const idx = project.compositions.findIndex((c) => c.id === compId);
+  if (idx === -1) return project;
+  const comp = project.compositions[idx];
+  const next = project.compositions[idx + 1];
+  const maxOverlap = next ? Math.max(0, Math.min(comp.duration, next.duration) - MIN_OVERLAP_GAP) : 0;
+  const clamped = Math.max(0, Math.min(maxOverlap, overlap));
+  return recomputeStartTimes({
+    ...project,
+    compositions: project.compositions.map((c) => (c.id === compId ? { ...c, overlap_next: clamped } : c)),
+  });
+}
+
 export function removeComposition(project: Project, compId: string): Project {
   if (project.compositions.length <= 1) return project;
   return recomputeStartTimes({

@@ -17,6 +17,7 @@ interface Props {
   onAddComposition: () => void;
   onSeek: (t: number) => void;
   onResizeComposition: (compId: string, duration: number) => void;
+  onUpdateOverlap: (compId: string, overlap: number) => void;
   onUpdateElementTiming: (elementId: string, startTime: number, duration: number | null) => void;
   onUpdateAudioTiming: (trackId: string, startTime: number, duration: number | null) => void;
   onSplit: () => void;
@@ -51,6 +52,7 @@ export default function Timeline({
   onAddComposition,
   onSeek,
   onResizeComposition,
+  onUpdateOverlap,
   onUpdateElementTiming,
   onUpdateAudioTiming,
   onSplit,
@@ -184,6 +186,19 @@ export default function Timeline({
                 }}
               >
                 <span className="timeline-scene-name">{comp.name}</span>
+                {i < project.compositions.length - 1 && (
+                  <input
+                    type="number"
+                    className="timeline-scene-overlap mono"
+                    step={0.1}
+                    min={0}
+                    value={comp.overlap_next}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onUpdateOverlap(comp.id, Number(e.target.value))}
+                    title={t("timeline.overlap")}
+                  />
+                )}
                 <span className="timeline-scene-resize" onPointerDown={(e) => startCompositionResize(comp, e)} />
               </div>
             ))}

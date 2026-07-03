@@ -34,7 +34,9 @@ import {
 import {
   addComposition,
   resolveActiveComposition,
+  setCompositionOverlap,
   setCompositionTransitionIn,
+  setCompositionTransitionOut,
   updateCompositionDuration,
 } from "../lib/timeline";
 import TopBar from "./editor/TopBar";
@@ -331,6 +333,14 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
           onSetTransitionIn={(transitionType) =>
             mutate((p) => setCompositionTransitionIn(p, active.composition.id, transitionType))
           }
+          onSetTransitionOut={(transitionType) =>
+            mutate((p) => setCompositionTransitionOut(p, active.composition.id, transitionType))
+          }
+          onSeekToNext={() => {
+            const idx = project.compositions.findIndex((c) => c.id === active.composition.id);
+            const next = project.compositions[idx + 1];
+            setCurrentTime(next ? next.start_time : project.duration);
+          }}
           onUndo={handleUndo}
           onRedo={handleRedo}
           canUndo={canUndo}
@@ -357,6 +367,7 @@ export default function Editor({ projectDir, onBack, onOpenProject }: Props) {
         onAddComposition={() => mutate(addComposition)}
         onSeek={setCurrentTime}
         onResizeComposition={(compId, duration) => mutate((p) => updateCompositionDuration(p, compId, duration))}
+        onUpdateOverlap={(compId, overlap) => mutate((p) => setCompositionOverlap(p, compId, overlap))}
         onUpdateElementTiming={(elementId, startTime, duration) =>
           mutate((p) => updateElementTiming(p, elementId, startTime, duration))
         }

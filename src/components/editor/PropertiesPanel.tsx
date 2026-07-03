@@ -8,20 +8,19 @@ import {
   Music,
   ArrowUp,
   ArrowDown,
+  Plus,
+  X,
 } from "lucide-react";
 import type { Element } from "../../bindings/Element";
 import type { AudioTrack } from "../../bindings/AudioTrack";
 import type { AnimationType } from "../../bindings/AnimationType";
+import type { Animation } from "../../bindings/Animation";
+import type { Easing } from "../../bindings/Easing";
+import type { TextAlign } from "../../bindings/TextAlign";
+import type { VerticalAlign } from "../../bindings/VerticalAlign";
 import type { ImagePanType } from "../../bindings/ImagePanType";
 import type { ElementPatch } from "../../lib/elements";
-
-const COLOR_SWATCHES = [
-  "rgba(255,255,255,1)",
-  "rgba(15,15,21,1)",
-  "rgba(92,134,255,1)",
-  "rgba(164,92,255,1)",
-  "rgba(56,209,122,1)",
-];
+import ColorPickerField from "./ColorPickerField";
 
 const FIT_MODES = ["cover", "stretch", "fit-largest", "fit-width", "fit-height"] as const;
 
@@ -36,35 +35,121 @@ const ANIMATION_OPTIONS: { type: AnimationType; labelKey: string }[] = [
   { type: "bounce", labelKey: "properties.animBounce" },
 ];
 
+const EASING_OPTIONS: { value: Easing; labelKey: string }[] = [
+  { value: "linear", labelKey: "properties.easingLinear" },
+  { value: "power1-in", labelKey: "properties.easingPower1In" },
+  { value: "power1-out", labelKey: "properties.easingPower1Out" },
+  { value: "power1-in-out", labelKey: "properties.easingPower1InOut" },
+  { value: "power2-in", labelKey: "properties.easingPower2In" },
+  { value: "power2-out", labelKey: "properties.easingPower2Out" },
+  { value: "power2-in-out", labelKey: "properties.easingPower2InOut" },
+  { value: "power3-in", labelKey: "properties.easingPower3In" },
+  { value: "power3-out", labelKey: "properties.easingPower3Out" },
+  { value: "power3-in-out", labelKey: "properties.easingPower3InOut" },
+  { value: "bounce", labelKey: "properties.easingBounce" },
+];
+
+const DEFAULT_ANIMATION: Animation = {
+  animation_type: "fade",
+  direction: "in",
+  duration: 0.6,
+  easing: "power2-out",
+  with_fade: true,
+};
+
 function AnimationFields({ element, onUpdate }: { element: Element; onUpdate: Props["onUpdate"] }) {
   const { t } = useTranslation();
-  const current = element.animations[0]?.animation_type ?? null;
 
-  function toggle(type: AnimationType) {
-    if (current === type) {
-      onUpdate({ animations: [] });
-    } else {
-      onUpdate({
-        animations: [{ animation_type: type, direction: "in", duration: 0.6, easing: "power2-out", with_fade: true }],
-      });
-    }
+  function addAnimation() {
+    onUpdate({ animations: [...element.animations, { ...DEFAULT_ANIMATION }] });
+  }
+
+  function updateAnimation(index: number, patch: Partial<Animation>) {
+    onUpdate({ animations: element.animations.map((a, i) => (i === index ? { ...a, ...patch } : a)) });
+  }
+
+  function removeAnimation(index: number) {
+    onUpdate({ animations: element.animations.filter((_, i) => i !== index) });
   }
 
   return (
     <div className="properties-section">
-      <span className="properties-label">{t("properties.animation")}</span>
-      <div className="properties-grid-2">
-        {ANIMATION_OPTIONS.map((opt) => (
-          <button
-            type="button"
-            key={opt.type}
-            className={`properties-anim-tile${current === opt.type ? " active" : ""}`}
-            onClick={() => toggle(opt.type)}
-          >
-            {t(opt.labelKey)}
-          </button>
-        ))}
+      <div className="properties-row properties-row-header">
+        <span className="properties-label">{t("properties.animation")}</span>
+        <button type="button" className="properties-toggle" onClick={addAnimation} title={t("properties.animAdd")}>
+          <Plus size={12} />
+        </button>
       </div>
+      {element.animations.map((anim, i) => (
+        <div key={i} className="animation-entry">
+          <div className="properties-row">
+            <select
+              className="properties-input"
+              value={anim.animation_type}
+              onChange={(e) => updateAnimation(i, { animation_type: e.target.value as AnimationType })}
+            >
+              {ANIMATION_OPTIONS.map((opt) => (
+                <option key={opt.type} value={opt.type}>
+                  {t(opt.labelKey)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="properties-toggle"
+              onClick={() => removeAnimation(i)}
+              title={t("properties.animRemove")}
+            >
+              <X size={12} />
+            </button>
+          </div>
+          <div className="properties-row">
+            <button
+              type="button"
+              className={`properties-toggle${anim.direction === "in" ? " active" : ""}`}
+              onClick={() => updateAnimation(i, { direction: "in" })}
+            >
+              {t("properties.animIn")}
+            </button>
+            <button
+              type="button"
+              className={`properties-toggle${anim.direction === "out" ? " active" : ""}`}
+              onClick={() => updateAnimation(i, { direction: "out" })}
+            >
+              {t("properties.animOut")}
+            </button>
+            <button
+              type="button"
+              className={`properties-toggle${anim.with_fade ? " active" : ""}`}
+              onClick={() => updateAnimation(i, { with_fade: !anim.with_fade })}
+              title={t("properties.animFadeToggle")}
+            >
+              {t("properties.animFadeShort")}
+            </button>
+          </div>
+          <div className="properties-row">
+            <input
+              className="properties-input mono"
+              type="number"
+              step={0.1}
+              min={0.1}
+              value={anim.duration}
+              onChange={(e) => updateAnimation(i, { duration: Number(e.target.value) })}
+            />
+            <select
+              className="properties-input"
+              value={anim.easing}
+              onChange={(e) => updateAnimation(i, { easing: e.target.value as Easing })}
+            >
+              {EASING_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {t(opt.labelKey)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -204,6 +289,15 @@ function PositionFields({ element, onUpdate }: { element: Element; onUpdate: Pro
             onChange={(e) => onUpdate({ height: Number(e.target.value) })}
           />
         </label>
+        <label className="properties-mini-field">
+          {t("properties.rotation")}
+          <input
+            className="properties-input mono"
+            type="number"
+            value={Math.round(element.rotation)}
+            onChange={(e) => onUpdate({ rotation: Number(e.target.value) })}
+          />
+        </label>
       </div>
     </div>
   );
@@ -232,6 +326,38 @@ function Header({
     </div>
   );
 }
+
+function BackgroundColorField({
+  value,
+  onChange,
+  defaultColor = "rgba(0,0,0,0.35)",
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+  defaultColor?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="properties-section">
+      <div className="properties-row properties-row-header">
+        <span className="properties-label">{t("properties.backgroundColor")}</span>
+        <button
+          type="button"
+          className={`properties-toggle${value ? " active" : ""}`}
+          onClick={() => onChange(value ? null : defaultColor)}
+        >
+          {value ? t("properties.backgroundColorOn") : t("properties.backgroundColorOff")}
+        </button>
+      </div>
+      {value && <ColorPickerField value={value} onChange={onChange} />}
+    </div>
+  );
+}
+
+const TEXT_ALIGN_OPTIONS: TextAlign[] = ["left", "center", "right"];
+const TEXT_ALIGN_LABELS: Record<TextAlign, string> = { left: "⟵", center: "•", right: "⟶" };
+const VERTICAL_ALIGN_OPTIONS: VerticalAlign[] = ["top", "middle", "bottom"];
+const VERTICAL_ALIGN_LABELS: Record<VerticalAlign, string> = { top: "⤒", middle: "•", bottom: "⤓" };
 
 function TextProperties({
   element,
@@ -293,19 +419,46 @@ function TextProperties({
       </div>
 
       <div className="properties-section">
-        <span className="properties-label">{t("properties.color")}</span>
-        <div className="properties-swatches">
-          {COLOR_SWATCHES.map((c) => (
+        <span className="properties-label">{t("properties.alignment")}</span>
+        <div className="properties-row">
+          {TEXT_ALIGN_OPTIONS.map((a) => (
             <button
               type="button"
-              key={c}
-              className={`properties-swatch${element.color === c ? " selected" : ""}`}
-              style={{ background: c }}
-              onClick={() => onUpdate({ color: c })}
-            />
+              key={a}
+              className={`properties-toggle${element.alignment === a ? " active" : ""}`}
+              onClick={() => onUpdate({ alignment: a })}
+            >
+              {TEXT_ALIGN_LABELS[a]}
+            </button>
           ))}
         </div>
       </div>
+
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.verticalAlignment")}</span>
+        <div className="properties-row">
+          {VERTICAL_ALIGN_OPTIONS.map((a) => (
+            <button
+              type="button"
+              key={a}
+              className={`properties-toggle${element.vertical_alignment === a ? " active" : ""}`}
+              onClick={() => onUpdate({ vertical_alignment: a })}
+            >
+              {VERTICAL_ALIGN_LABELS[a]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="properties-section">
+        <span className="properties-label">{t("properties.color")}</span>
+        <ColorPickerField value={element.color} onChange={(color) => onUpdate({ color })} />
+      </div>
+
+      <BackgroundColorField
+        value={element.background_color}
+        onChange={(background_color) => onUpdate({ background_color })}
+      />
 
       <PositionFields element={element} onUpdate={onUpdate} />
       <AnimationFields element={element} onUpdate={onUpdate} />
@@ -345,6 +498,26 @@ function MediaProperties({
         </select>
       </div>
 
+      {element.type === "video" && (
+        <div className="properties-section">
+          <span className="properties-label">{t("properties.videoOffset")}</span>
+          <input
+            className="properties-input mono"
+            type="number"
+            step={0.1}
+            min={0}
+            value={element.video_offset}
+            onChange={(e) => onUpdate({ video_offset: Number(e.target.value) })}
+          />
+        </div>
+      )}
+
+      <BackgroundColorField
+        value={element.background_color}
+        onChange={(background_color) => onUpdate({ background_color })}
+        defaultColor="rgba(0,0,0,1)"
+      />
+
       <ImagePanFields element={element} onUpdate={onUpdate} />
       <PositionFields element={element} onUpdate={onUpdate} />
       <AnimationFields element={element} onUpdate={onUpdate} />
@@ -371,17 +544,7 @@ function ShapeProperties({
 
       <div className="properties-section">
         <span className="properties-label">{t("properties.fillColor")}</span>
-        <div className="properties-swatches">
-          {COLOR_SWATCHES.map((c) => (
-            <button
-              type="button"
-              key={c}
-              className={`properties-swatch${element.fill === c ? " selected" : ""}`}
-              style={{ background: c }}
-              onClick={() => onUpdate({ fill: c })}
-            />
-          ))}
-        </div>
+        <ColorPickerField value={element.fill} onChange={(fill) => onUpdate({ fill })} />
       </div>
 
       <div className="properties-section">
@@ -402,7 +565,24 @@ function ShapeProperties({
             S
           </button>
         </div>
+        {element.stroke !== "none" && (
+          <ColorPickerField value={element.stroke} onChange={(stroke) => onUpdate({ stroke })} />
+        )}
       </div>
+
+      {element.shape_type === "rectangle" && (
+        <div className="properties-section">
+          <span className="properties-label">{t("properties.borderRadius")}</span>
+          <input
+            type="range"
+            min={0}
+            max={50}
+            step={1}
+            value={element.border_radius ?? 0}
+            onChange={(e) => onUpdate({ border_radius: Number(e.target.value) })}
+          />
+        </div>
+      )}
 
       <PositionFields element={element} onUpdate={onUpdate} />
       <AnimationFields element={element} onUpdate={onUpdate} />

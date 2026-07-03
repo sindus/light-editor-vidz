@@ -29,6 +29,8 @@ interface Props {
   onSelectElement: (id: string | null) => void;
   onUpdateElement: (elementId: string, patch: Partial<GeometryPatch>) => void;
   onSetTransitionIn: (transitionType: TransitionType | null) => void;
+  onSetTransitionOut: (transitionType: TransitionType | null) => void;
+  onSeekToNext: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -178,6 +180,8 @@ export default function CanvasStage({
   onSelectElement,
   onUpdateElement,
   onSetTransitionIn,
+  onSetTransitionOut,
+  onSeekToNext,
   onUndo,
   onRedo,
   canUndo,
@@ -232,7 +236,19 @@ export default function CanvasStage({
             title={t("canvas.transitionLabel")}
           >
             {TRANSITION_OPTIONS.map((o) => (
-              <option key={o.labelKey} value={o.value}>
+              <option key={`in-${o.labelKey}`} value={o.value}>
+                {t(o.labelKey)}
+              </option>
+            ))}
+          </select>
+          <select
+            className="canvas-transition-select mono"
+            value={composition.transition_out?.transition_type ?? ""}
+            onChange={(e) => onSetTransitionOut(e.target.value ? (e.target.value as TransitionType) : null)}
+            title={t("canvas.transitionOutLabel")}
+          >
+            {TRANSITION_OPTIONS.map((o) => (
+              <option key={`out-${o.labelKey}`} value={o.value}>
                 {t(o.labelKey)}
               </option>
             ))}
@@ -334,7 +350,7 @@ export default function CanvasStage({
         <button type="button" className="play-btn" onClick={onTogglePlay}>
           {playing ? <Pause size={16} fill="#fff" /> : <Play size={16} fill="#fff" />}
         </button>
-        <button type="button" className="icon-btn" disabled title={t("canvas.next")}>
+        <button type="button" className="icon-btn" onClick={onSeekToNext} title={t("canvas.next")}>
           <SkipForward size={16} />
         </button>
         <span className="mono playback-timecode">
