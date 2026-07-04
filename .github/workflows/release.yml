@@ -7,6 +7,12 @@ on:
 
 jobs:
   release:
+    # Le repo est configuré en permissions par défaut "lecture seule" pour GITHUB_TOKEN
+    # (Settings > Actions > Workflow permissions) : sans cette déclaration explicite,
+    # tauri-action échoue à la création de la release ("Resource not accessible by
+    # integration"). Scopé à ce job plutôt que d'assouplir le réglage global du repo.
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
