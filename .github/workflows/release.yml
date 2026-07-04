@@ -40,6 +40,11 @@ jobs:
 
       - run: npm ci
 
+      # src/bindings/ est généré depuis le modèle Rust et gitignoré : sans cette étape,
+      # le build frontend échoue (mêmes types que dans le job CI).
+      - name: Generate TS bindings from the Rust model
+        run: npm run gen:types
+
       - name: Build and publish
         uses: tauri-apps/tauri-action@v0
         env:
