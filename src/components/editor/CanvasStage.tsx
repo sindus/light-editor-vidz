@@ -6,7 +6,6 @@ import type { Composition } from "../../bindings/Composition";
 import type { Element } from "../../bindings/Element";
 import type { TransitionType } from "../../bindings/TransitionType";
 import { formatTimecode } from "../../lib/format";
-import { assetUrl } from "../../lib/assetUrl";
 import { isElementActive } from "../../lib/timeline";
 import {
   resolveCompositionTransition,
@@ -19,6 +18,7 @@ import {
 } from "../../lib/animate";
 import ElementInteraction, { type GeometryPatch, type SnapGuides } from "./ElementInteraction";
 import ShapeView from "./ShapeView";
+import { ImageElementView, TextElementView, VideoElementView } from "./ElementViews";
 
 interface Props {
   project: Project;
@@ -82,144 +82,6 @@ function activeDurationOf(el: Element, composition: Composition): number {
   return el.duration ?? composition.duration - el.start_time;
 }
 
-function TextElementView({ element, content }: { element: Extract<Element, { type: "text" }>; content: string }) {
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        alignItems:
-          element.vertical_alignment === "top"
-            ? "flex-start"
-            : element.vertical_alignment === "bottom"
-              ? "flex-end"
-              : "center",
-        justifyContent:
-          element.alignment === "left" ? "flex-start" : element.alignment === "right" ? "flex-end" : "center",
-        textAlign: element.alignment,
-        color: element.color,
-        background: element.background_color ?? undefined,
-        fontSize: `${element.font_size ?? 4}cqw`,
-        fontFamily: element.font_family ?? undefined,
-        fontWeight: element.font_weight === "bold" ? 800 : 500,
-        fontStyle: element.font_style ?? undefined,
-        letterSpacing: element.letter_spacing ? `${element.letter_spacing}cqw` : undefined,
-        lineHeight: element.line_height ?? undefined,
-        textShadow: element.text_shadow ? `2px 2px 4px ${element.text_shadow}` : undefined,
-        textDecoration:
-          element.underline && element.strikethrough
-            ? "underline line-through"
-            : element.underline
-              ? "underline"
-              : element.strikethrough
-                ? "line-through"
-                : undefined,
-        padding: "0 4px",
-        pointerEvents: "none",
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-      }}
-    >
-      {content}
-    </div>
-  );
-}
-
-function ImageElementView({
-  element,
-  projectDir,
-  panTransform,
-}: {
-  element: Extract<Element, { type: "image" }>;
-  projectDir: string;
-  panTransform: string;
-}) {
-  const objectFit = element.fit_mode === "stretch" ? "fill" : element.fit_mode === "cover" ? "cover" : "contain";
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
-        borderRadius: element.corner_radius ? `${element.corner_radius}px` : undefined,
-        border: element.border_color ? `${element.border_width ?? 2}px solid ${element.border_color}` : undefined,
-        boxSizing: "border-box",
-      }}
-    >
-      <img
-        src={assetUrl(projectDir, element.src)}
-        alt={element.name}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit,
-          background: element.background_color ?? "rgba(255,255,255,0.04)",
-          pointerEvents: "none",
-          transform: panTransform || undefined,
-        }}
-      />
-    </div>
-  );
-}
-
-function VideoElementView({
-  element,
-  projectDir,
-  localTime,
-  playing,
-  panTransform,
-}: {
-  element: Extract<Element, { type: "video" }>;
-  projectDir: string;
-  localTime: number;
-  playing: boolean;
-  panTransform: string;
-}) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const objectFit = element.fit_mode === "stretch" ? "fill" : element.fit_mode === "cover" ? "cover" : "contain";
-
-  useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    const speed = element.playback_speed > 0.01 ? element.playback_speed : 1;
-    const targetTime = Math.max(0, localTime - element.start_time) * speed + element.video_offset;
-    if (Math.abs(video.currentTime - targetTime) > 0.25) {
-      video.currentTime = targetTime;
-    }
-    video.playbackRate = speed;
-    if (playing) video.play().catch(() => {});
-    else video.pause();
-  }, [localTime, playing, element.start_time, element.video_offset, element.playback_speed]);
-
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
-        borderRadius: element.corner_radius ? `${element.corner_radius}px` : undefined,
-        border: element.border_color ? `${element.border_width ?? 2}px solid ${element.border_color}` : undefined,
-        boxSizing: "border-box",
-      }}
-    >
-      <video
-        ref={ref}
-        src={assetUrl(projectDir, element.src)}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit,
-          background: element.background_color ?? "rgba(255,255,255,0.04)",
-          pointerEvents: "none",
-          transform: panTransform || undefined,
-        }}
-        muted
-      />
-    </div>
-  );
-}
-
 export default function CanvasStage({
   project,
   projectDir,
@@ -241,11 +103,40 @@ export default function CanvasStage({
   canRedo,
 }: Props) {
   const { t } = useTranslation();
-  const ratio = `${project.width}/${project.height}`;
   const stageRef = useRef<HTMLDivElement>(null);
+  const stageWrapRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   const [guides, setGuides] = useState<SnapGuides | null>(null);
   const [marquee, setMarquee] = useState<MarqueeRect | null>(null);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+
+  // Dimensions du canvas calculées explicitement en pixels plutôt que via la propriété CSS
+  // `aspect-ratio` : certaines versions de WebKitGTK (webview Tauri sur Linux) ne la supportent
+  // pas et retombent sur une hauteur de 0, rendant tout le canvas invisible sans erreur visible.
+  useEffect(() => {
+    const wrap = stageWrapRef.current;
+    if (!wrap) return;
+    const WRAP_PADDING = 68; // 34px de chaque côté, voir .canvas-stage-wrap
+    const MAX_STAGE_WIDTH = 860;
+    function recompute() {
+      if (!wrap) return;
+      const availW = wrap.clientWidth - WRAP_PADDING;
+      const availH = wrap.clientHeight - WRAP_PADDING;
+      if (availW <= 0 || availH <= 0) return;
+      const projectRatio = project.width / project.height;
+      let w = Math.min(availW, MAX_STAGE_WIDTH);
+      let h = w / projectRatio;
+      if (h > availH) {
+        h = availH;
+        w = h * projectRatio;
+      }
+      setStageSize({ width: Math.round(w), height: Math.round(h) });
+    }
+    recompute();
+    const observer = new ResizeObserver(recompute);
+    observer.observe(wrap);
+    return () => observer.disconnect();
+  }, [project.width, project.height]);
 
   function startMarquee(e: ReactPointerEvent, additive: boolean) {
     const rect = stageRef.current?.getBoundingClientRect();
@@ -387,13 +278,14 @@ export default function CanvasStage({
         </div>
       </div>
 
-      <div className="canvas-stage-wrap">
+      <div className="canvas-stage-wrap" ref={stageWrapRef}>
         <div className="canvas-zoom-wrap" style={{ transform: zoom !== 1 ? `scale(${zoom})` : undefined }}>
           <div
             ref={stageRef}
             className="canvas-stage"
             style={{
-              aspectRatio: ratio,
+              width: stageSize.width || undefined,
+              height: stageSize.height || undefined,
               transform: compCss.transform || undefined,
               opacity: compCss.opacity,
               filter: compCss.filter || undefined,

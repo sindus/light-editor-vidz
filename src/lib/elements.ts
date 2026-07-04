@@ -88,16 +88,200 @@ export function createSubtitleElement(): Element {
   };
 }
 
-export type TextStylePreset = "neon" | "shadow" | "box" | "spaced";
+export type TextStylePreset =
+  | "neon"
+  | "shadow"
+  | "box"
+  | "spaced"
+  | "glow"
+  | "outline"
+  | "impact"
+  | "minimal"
+  | "elegant"
+  | "highlight"
+  | "underline"
+  | "strike"
+  | "retro"
+  | "vintage"
+  | "neonPink"
+  | "neonGreen"
+  | "warning"
+  | "success"
+  | "quote"
+  | "caption"
+  | "wideSpace"
+  | "condensed"
+  | "gold"
+  | "cinema";
 
-const STYLE_PRESETS: Record<
-  TextStylePreset,
-  { content: string; color: string; background_color: string | null; font_weight: "bold" | "normal" }
-> = {
-  neon: { content: "Néon", color: "rgba(92,134,255,1)", background_color: null, font_weight: "bold" },
-  shadow: { content: "Ombre", color: "rgba(255,255,255,1)", background_color: null, font_weight: "bold" },
-  box: { content: "Boîte", color: "rgba(17,17,17,1)", background_color: "rgba(255,255,255,1)", font_weight: "bold" },
-  spaced: { content: "S P A C É", color: "rgba(255,255,255,1)", background_color: null, font_weight: "normal" },
+interface StylePreset {
+  content: string;
+  color: string;
+  background_color: string | null;
+  font_weight: "bold" | "normal";
+  font_style: "normal" | "italic";
+  letter_spacing: number | null;
+  text_shadow: string | null;
+  underline: boolean;
+  strikethrough: boolean;
+}
+
+const STYLE_DEFAULTS: Omit<StylePreset, "content" | "color"> = {
+  background_color: null,
+  font_weight: "bold",
+  font_style: "normal",
+  letter_spacing: null,
+  text_shadow: null,
+  underline: false,
+  strikethrough: false,
+};
+
+export const STYLE_PRESETS: Record<TextStylePreset, StylePreset> = {
+  neon: { ...STYLE_DEFAULTS, content: "Néon", color: "rgba(92,134,255,1)" },
+  shadow: {
+    ...STYLE_DEFAULTS,
+    content: "Ombre",
+    color: "rgba(255,255,255,1)",
+    text_shadow: "rgba(92,134,255,1)",
+  },
+  box: {
+    ...STYLE_DEFAULTS,
+    content: "Boîte",
+    color: "rgba(17,17,17,1)",
+    background_color: "rgba(255,255,255,1)",
+  },
+  spaced: {
+    ...STYLE_DEFAULTS,
+    content: "S P A C É",
+    color: "rgba(255,255,255,1)",
+    font_weight: "normal",
+  },
+  glow: {
+    ...STYLE_DEFAULTS,
+    content: "Lueur",
+    color: "rgba(120,200,255,1)",
+    text_shadow: "rgba(120,200,255,0.8)",
+  },
+  outline: {
+    ...STYLE_DEFAULTS,
+    content: "Contour",
+    color: "rgba(255,255,255,1)",
+    text_shadow: "rgba(0,0,0,0.9)",
+  },
+  impact: {
+    ...STYLE_DEFAULTS,
+    content: "IMPACT",
+    color: "rgba(17,17,17,1)",
+    background_color: "rgba(255,214,0,1)",
+  },
+  minimal: {
+    ...STYLE_DEFAULTS,
+    content: "Minimal",
+    color: "rgba(255,255,255,0.85)",
+    font_weight: "normal",
+  },
+  elegant: {
+    ...STYLE_DEFAULTS,
+    content: "Élégant",
+    color: "rgba(255,255,255,1)",
+    font_weight: "normal",
+    font_style: "italic",
+  },
+  highlight: {
+    ...STYLE_DEFAULTS,
+    content: "Surligné",
+    color: "rgba(17,17,17,1)",
+    background_color: "rgba(255,235,59,1)",
+  },
+  underline: {
+    ...STYLE_DEFAULTS,
+    content: "Souligné",
+    color: "rgba(255,255,255,1)",
+    font_weight: "normal",
+    underline: true,
+  },
+  strike: {
+    ...STYLE_DEFAULTS,
+    content: "Barré",
+    color: "rgba(255,255,255,1)",
+    font_weight: "normal",
+    strikethrough: true,
+  },
+  retro: {
+    ...STYLE_DEFAULTS,
+    content: "Rétro",
+    color: "rgba(255,255,255,1)",
+    background_color: "rgba(214,94,39,1)",
+  },
+  vintage: {
+    ...STYLE_DEFAULTS,
+    content: "Vintage",
+    color: "rgba(214,186,140,1)",
+    font_weight: "normal",
+    font_style: "italic",
+  },
+  neonPink: {
+    ...STYLE_DEFAULTS,
+    content: "Néon rose",
+    color: "rgba(255,92,200,1)",
+    text_shadow: "rgba(255,92,200,0.8)",
+  },
+  neonGreen: {
+    ...STYLE_DEFAULTS,
+    content: "Néon vert",
+    color: "rgba(92,255,160,1)",
+    text_shadow: "rgba(92,255,160,0.8)",
+  },
+  warning: {
+    ...STYLE_DEFAULTS,
+    content: "Alerte",
+    color: "rgba(255,255,255,1)",
+    background_color: "rgba(220,53,69,1)",
+  },
+  success: {
+    ...STYLE_DEFAULTS,
+    content: "Succès",
+    color: "rgba(255,255,255,1)",
+    background_color: "rgba(56,209,122,1)",
+  },
+  quote: {
+    ...STYLE_DEFAULTS,
+    content: "Citation",
+    color: "rgba(220,220,220,0.85)",
+    font_weight: "normal",
+    font_style: "italic",
+  },
+  caption: {
+    ...STYLE_DEFAULTS,
+    content: "Légende",
+    color: "rgba(255,255,255,1)",
+    background_color: "rgba(0,0,0,0.5)",
+    font_weight: "normal",
+  },
+  wideSpace: {
+    ...STYLE_DEFAULTS,
+    content: "ESPACÉ",
+    color: "rgba(255,255,255,1)",
+    letter_spacing: 1.5,
+  },
+  condensed: {
+    ...STYLE_DEFAULTS,
+    content: "Condensé",
+    color: "rgba(255,255,255,1)",
+    letter_spacing: -1,
+  },
+  gold: {
+    ...STYLE_DEFAULTS,
+    content: "Or",
+    color: "rgba(212,175,55,1)",
+  },
+  cinema: {
+    ...STYLE_DEFAULTS,
+    content: "CINÉMA",
+    color: "rgba(255,255,255,1)",
+    background_color: "rgba(0,0,0,0.7)",
+    letter_spacing: 0.5,
+  },
 };
 
 export function createStyledTextElement(preset: TextStylePreset): Element {
@@ -113,12 +297,12 @@ export function createStyledTextElement(preset: TextStylePreset): Element {
     font_size: 6,
     font_family: "Manrope",
     font_weight: p.font_weight,
-    font_style: "normal",
-    letter_spacing: null,
+    font_style: p.font_style,
+    letter_spacing: p.letter_spacing,
     line_height: null,
-    text_shadow: null,
-    underline: false,
-    strikethrough: false,
+    text_shadow: p.text_shadow,
+    underline: p.underline,
+    strikethrough: p.strikethrough,
   };
 }
 
@@ -149,7 +333,9 @@ export function createVideoElement(relativeSrc: string, name: string): Element {
     border_color: null,
     border_width: null,
     volume: 1,
+    muted: false,
     playback_speed: 1,
+    loop_video: false,
   };
 }
 
@@ -252,12 +438,17 @@ export function splitElementInProject(project: Project, compId: string, elementI
       const cutAt = at - el.start_time;
       if (cutAt <= 0.05 || cutAt >= fullDuration - 0.05) return comp;
       const left = { ...el, duration: cutAt };
-      const right = {
+      const right: Element = {
         ...el,
         id: crypto.randomUUID(),
         start_time: el.start_time + cutAt,
         duration: fullDuration - cutAt,
       };
+      // Continuité de la source vidéo : la moitié droite doit reprendre là où la coupe a eu
+      // lieu dans le fichier source, pas au point d'entrée d'origine.
+      if (right.type === "video") {
+        right.video_offset += cutAt * (right.playback_speed > 0.01 ? right.playback_speed : 1);
+      }
       const elements = [...comp.elements];
       elements.splice(idx, 1, left, right);
       return { ...comp, elements };
@@ -295,7 +486,25 @@ export function duplicateElementsInProject(
     current = next;
     if (newId) newIds.push(newId);
   }
-  return { project: current, newIds };
+  return { project: remapGroupIds(current, newIds), newIds };
+}
+
+/** Donne un `group_id` neuf (partagé par copie de groupe) aux éléments listés : les copies ne
+ * doivent pas rejoindre le groupe des originaux, sinon déplacer une copie déplace l'original. */
+export function remapGroupIds(project: Project, elementIds: string[]): Project {
+  const idSet = new Set(elementIds);
+  const remap = new Map<string, string>();
+  return {
+    ...project,
+    compositions: project.compositions.map((comp) => ({
+      ...comp,
+      elements: comp.elements.map((el) => {
+        if (!idSet.has(el.id) || !el.group_id) return el;
+        if (!remap.has(el.group_id)) remap.set(el.group_id, crypto.randomUUID());
+        return { ...el, group_id: remap.get(el.group_id)! } as Element;
+      }),
+    })),
+  };
 }
 
 /** Supprime plusieurs éléments (par id) de toutes les compositions. */

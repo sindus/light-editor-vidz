@@ -70,3 +70,39 @@ export function exportProject(
 export function readTextFile(path: string): Promise<string> {
   return invoke("read_text_file", { path });
 }
+
+/** Lit un média en octets bruts (contournement `asset://` pour la vidéo, voir CanvasStage). */
+export function readMediaFile(projectDir: string, relativeSrc: string): Promise<ArrayBuffer> {
+  return invoke("read_media_file", { projectDir, relativeSrc });
+}
+
+/** Résultat normalisé d'une recherche d'assets libres de droit (voir `stock.rs` côté Rust). */
+export interface StockResult {
+  provider: string;
+  kind: string;
+  thumbnail_url: string | null;
+  download_url: string;
+  page_url: string | null;
+  author: string | null;
+  license: string | null;
+  duration: number | null;
+  filename: string;
+}
+
+export interface StockSearchResponse {
+  results: StockResult[];
+  /** Erreurs par moteur (clé invalide, réseau…), non bloquantes. */
+  errors: string[];
+  /** Moteurs interrogés — vide = aucun moteur configuré pour ce type de média. */
+  providers: string[];
+}
+
+/** Recherche en parallèle sur tous les moteurs d'assets libres configurés. */
+export function searchStockAssets(kind: AssetKind, query: string): Promise<StockSearchResponse> {
+  return invoke("search_stock_assets", { kind, query });
+}
+
+/** Télécharge un asset choisi dans `assets/` du projet, retourne son chemin relatif. */
+export function importStockAsset(projectDir: string, kind: AssetKind, url: string, filename: string): Promise<string> {
+  return invoke("import_stock_asset", { projectDir, kind, url, filename });
+}

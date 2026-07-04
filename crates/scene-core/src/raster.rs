@@ -77,24 +77,82 @@ fn load_image_uncached(path: &Path) -> Option<image::RgbaImage> {
     image::open(path).ok().map(|i| i.to_rgba8())
 }
 
+/// Index (1-based) de la frame extraite à afficher pour `local_time` (secondes dans la source).
+/// Hors boucle : clamp sur la dernière frame (gel). En boucle : retour au point d'entrée
+/// (`video_offset`), pas au début du fichier — même convention que la preview
+/// (`VideoElementView`, modulo sur [offset, fin de source)).
+fn video_frame_index(
+    local_time: f64,
+    fps: u32,
+    count: u32,
+    loop_video: bool,
+    video_offset: f64,
+) -> i64 {
+    let count = count as i64;
+    let raw_idx = (local_time.max(0.0) * fps as f64).floor() as i64;
+    let start_idx = ((video_offset.max(0.0) * fps as f64).floor() as i64).clamp(0, count - 1);
+    let span = count - start_idx;
+    if loop_video && span > 0 && raw_idx >= count {
+        start_idx + (raw_idx - start_idx).rem_euclid(span) + 1
+    } else {
+        (raw_idx + 1).clamp(1, count)
+    }
+}
+
 fn parse_css_color(s: &str) -> Color {
-    // Supporte "rgba(r,g,b,a)" (format utilisé par le frontend) avec repli sur blanc opaque.
-    if let Some(inner) = s.strip_prefix("rgba(").and_then(|s| s.strip_suffix(')')) {
+    // Supporte "rgba(r,g,b,a)" (format produit par le frontend), mais aussi "rgb(r,g,b)" et
+    // "#rrggbb"/"#rrggbbaa" (saisie manuelle dans le champ couleur, import legacy), avec repli
+    // sur blanc opaque.
+    let s = s.trim();
+    if let Some(inner) = s
+        .strip_prefix("rgba(")
+        .or_else(|| s.strip_prefix("rgb("))
+        .and_then(|s| s.strip_suffix(')'))
+    {
         let parts: Vec<f32> = inner
             .split(',')
             .filter_map(|p| p.trim().parse().ok())
             .collect();
-        if parts.len() == 4 {
+        if parts.len() == 3 || parts.len() == 4 {
             return Color::from_rgba(
                 (parts[0] / 255.0).clamp(0.0, 1.0),
                 (parts[1] / 255.0).clamp(0.0, 1.0),
                 (parts[2] / 255.0).clamp(0.0, 1.0),
-                parts[3].clamp(0.0, 1.0),
+                parts.get(3).copied().unwrap_or(1.0).clamp(0.0, 1.0),
             )
             .unwrap_or(Color::WHITE);
         }
     }
+    if let Some(hex) = s.strip_prefix('#') {
+        if (hex.len() == 6 || hex.len() == 8) && hex.chars().all(|c| c.is_ascii_hexdigit()) {
+            let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(255);
+            let a = if hex.len() == 8 { channel(6) } else { 255 };
+            return Color::from_rgba8(channel(0), channel(2), channel(4), a);
+        }
+    }
     Color::WHITE
+}
+
+/// Attributs cosmic-text (famille/graisse/style) d'un élément texte — partagé entre la mise en
+/// page de mesure (`text_fits_at_size`) et le rendu (`draw_text`) pour garantir des métriques
+/// identiques.
+fn text_attrs(text_el: &crate::model::TextElement) -> Attrs<'_> {
+    let weight = if text_el.font_weight == Some(crate::model::FontWeight::Bold) {
+        Weight::BOLD
+    } else {
+        Weight::NORMAL
+    };
+    let style = if text_el.font_style == Some(crate::model::FontStyle::Italic) {
+        cosmic_text::Style::Italic
+    } else {
+        cosmic_text::Style::Normal
+    };
+    let family = text_el
+        .font_family
+        .as_deref()
+        .map(Family::Name)
+        .unwrap_or(Family::SansSerif);
+    Attrs::new().family(family).weight(weight).style(style)
 }
 
 fn to_skia_blend_mode(mode: Option<crate::model::BlendMode>) -> tiny_skia::BlendMode {
@@ -181,6 +239,8 @@ impl FrameRenderer {
         relative_src: &str,
         fps: u32,
         local_time: f64,
+        loop_video: bool,
+        video_offset: f64,
     ) -> Option<PathBuf> {
         if !self.video_frames.contains_key(relative_src) {
             let result = crate::paths::resolve_media_path(project_dir, relative_src)
@@ -189,7 +249,7 @@ impl FrameRenderer {
             self.video_frames.insert(relative_src.to_string(), result);
         }
         let (dir, count) = self.video_frames.get(relative_src)?.as_ref()?;
-        let idx = ((local_time.max(0.0) * fps as f64).floor() as i64 + 1).clamp(1, *count as i64);
+        let idx = video_frame_index(local_time, fps, *count, loop_video, video_offset);
         Some(dir.join(format!("frame_{idx:06}.png")))
     }
 
@@ -387,8 +447,14 @@ impl FrameRenderer {
                     };
                     let local_video_time =
                         local_element_time.max(0.0) * speed + video_el.video_offset;
-                    let frame_path =
-                        self.video_frame_at(project_dir, &video_el.src, fps, local_video_time);
+                    let frame_path = self.video_frame_at(
+                        project_dir,
+                        &video_el.src,
+                        fps,
+                        local_video_time,
+                        video_el.loop_video,
+                        video_el.video_offset,
+                    );
                     // Chaque frame vidéo décodée est un fichier PNG distinct, utilisé une seule
                     // fois (pas de lecture en arrière) : on la charge sans la mettre en cache,
                     // sous peine de faire croître `image_cache` sans limite sur tout l'export
@@ -443,17 +509,7 @@ impl FrameRenderer {
         let metrics = Metrics::new(font_size_px, line_height_px);
         let mut buffer = Buffer::new(&mut self.font_system, metrics);
         buffer.set_size(Some(w_px), Some(h_px));
-        let weight = if text_el.font_weight == Some(crate::model::FontWeight::Bold) {
-            Weight::BOLD
-        } else {
-            Weight::NORMAL
-        };
-        let family = text_el
-            .font_family
-            .as_deref()
-            .map(Family::Name)
-            .unwrap_or(Family::SansSerif);
-        let attrs = Attrs::new().family(family).weight(weight);
+        let attrs = text_attrs(text_el);
         buffer.set_text(&text_el.content, &attrs, Shaping::Advanced, None);
         buffer.shape_until_scroll(&mut self.font_system, false);
 
@@ -535,6 +591,12 @@ impl FrameRenderer {
             _ => std::borrow::Cow::Borrowed(text_el.content.as_str()),
         };
 
+        // Fond de l'élément : la preview applique `background_color` à toute la boîte du texte,
+        // pas seulement derrière les glyphes — même comportement ici.
+        if let Some(bg) = text_el.background_color.as_deref() {
+            layer.fill(parse_css_color(bg));
+        }
+
         let font_size_px = match text_el.font_size {
             Some(fs) => (fs / 100.0) as f32 * scene.width() as f32,
             None => self.autofit_font_size_px(text_el, w_px, h_px),
@@ -544,17 +606,7 @@ impl FrameRenderer {
         let mut buffer = Buffer::new(&mut self.font_system, metrics);
         buffer.set_size(Some(w_px), Some(h_px));
 
-        let weight = if text_el.font_weight == Some(crate::model::FontWeight::Bold) {
-            Weight::BOLD
-        } else {
-            Weight::NORMAL
-        };
-        let family = text_el
-            .font_family
-            .as_deref()
-            .map(Family::Name)
-            .unwrap_or(Family::SansSerif);
-        let attrs = Attrs::new().family(family).weight(weight);
+        let attrs = text_attrs(text_el);
         buffer.set_text(&display_content, &attrs, Shaping::Advanced, None);
         buffer.shape_until_scroll(&mut self.font_system, false);
 
@@ -576,6 +628,19 @@ impl FrameRenderer {
 
         let letter_spacing_px =
             (text_el.letter_spacing.unwrap_or(0.0) / 100.0) as f32 * scene.width() as f32;
+
+        // Décalage horizontal par ligne selon l'alignement (cosmic-text pose chaque run à
+        // gauche par défaut) ; la largeur effective inclut l'espacement de lettres ajouté
+        // manuellement entre les glyphes.
+        let h_offset = |run: &cosmic_text::LayoutRun| -> f32 {
+            let run_width =
+                run.line_w + letter_spacing_px * run.glyphs.len().saturating_sub(1) as f32;
+            match text_el.alignment {
+                crate::model::TextAlign::Left => 0.0,
+                crate::model::TextAlign::Center => ((w_px - run_width) / 2.0).max(0.0),
+                crate::model::TextAlign::Right => (w_px - run_width).max(0.0),
+            }
+        };
 
         // Décalage vertical (alignement) approximatif : on ne gère que top/middle/bottom simplement.
         let total_text_height = buffer.layout_runs().count() as f32 * line_height_px;
@@ -599,7 +664,7 @@ impl FrameRenderer {
                 if max_visible_lines.is_some_and(|max| run_idx >= max) {
                     continue;
                 }
-                let mut cumulative_spacing = 0.0f32;
+                let mut cumulative_spacing = h_offset(&run);
                 for glyph in run.glyphs {
                     let physical = glyph.physical(
                         (cumulative_spacing + offset, v_offset + run.line_y + offset),
@@ -638,7 +703,7 @@ impl FrameRenderer {
             if max_visible_lines.is_some_and(|max| run_idx >= max) {
                 continue;
             }
-            let mut cumulative_spacing = 0.0f32;
+            let mut cumulative_spacing = h_offset(&run);
             let mut min_x = f32::MAX;
             let mut max_x = f32::MIN;
             for glyph in run.glyphs {
@@ -802,6 +867,8 @@ fn box_blur(pixmap: &mut Pixmap, radius_px: f32) {
     }
 }
 
+/// Compose une couleur (alpha droit, non prémultiplié) sur un pixel du buffer prémultiplié :
+/// out = src×sa + dst×(1−sa) par canal, out_a = sa + dst_a×(1−sa) (opérateur "over" standard).
 fn blend_pixel(pixmap: &mut Pixmap, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) {
     if a == 0 {
         return;
@@ -810,12 +877,12 @@ fn blend_pixel(pixmap: &mut Pixmap, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) 
     let pixels = pixmap.pixels_mut();
     let existing = pixels[idx];
     let sa = a as f32 / 255.0;
-    let blend = |s: u8, d: u8| -> u8 { (s as f32 * sa + d as f32 * (1.0 - sa)).round() as u8 };
+    let over = |s: u8, d: u8| -> u8 { (s as f32 * sa + d as f32 * (1.0 - sa)).round() as u8 };
     let new_pixel = tiny_skia::PremultipliedColorU8::from_rgba(
-        blend((r as f32 * sa) as u8, existing.red()),
-        blend((g as f32 * sa) as u8, existing.green()),
-        blend((b as f32 * sa) as u8, existing.blue()),
-        blend(a, existing.alpha()),
+        over(r, existing.red()),
+        over(g, existing.green()),
+        over(b, existing.blue()),
+        (a as f32 + existing.alpha() as f32 * (1.0 - sa)).round() as u8,
     )
     .unwrap_or(existing);
     pixels[idx] = new_pixel;
@@ -1255,11 +1322,11 @@ mod tests {
                         strikethrough: false,
                     }),
                 ],
-                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
+            audio_tracks: vec![],
         }
     }
 
@@ -1410,11 +1477,11 @@ mod tests {
                     underline: false,
                     strikethrough: false,
                 })],
-                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
+            audio_tracks: vec![],
         };
         let mut renderer = FrameRenderer::new();
         let dir = std::env::temp_dir();
@@ -1795,13 +1862,15 @@ mod tests {
                     border_color: None,
                     border_width: None,
                     volume: 1.0,
+                    muted: false,
                     playback_speed: 1.0,
+                    loop_video: false,
                 })],
-                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
+            audio_tracks: vec![],
         };
 
         let mut renderer = FrameRenderer::with_scratch_dir(dir.join("scratch"));
@@ -1885,13 +1954,15 @@ mod tests {
                     border_color: None,
                     border_width: None,
                     volume: 1.0,
+                    muted: false,
                     playback_speed: 1.0,
+                    loop_video: false,
                 })],
-                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
+            audio_tracks: vec![],
         };
 
         let mut renderer = FrameRenderer::with_scratch_dir(dir.join("scratch"));
@@ -1906,5 +1977,139 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parse_css_color_supports_rgba_rgb_and_hex() {
+        let rgba = parse_css_color("rgba(255,0,0,0.5)");
+        assert_eq!((rgba.red(), rgba.alpha()), (1.0, 0.5));
+
+        let rgb = parse_css_color("rgb(0, 128, 0)");
+        assert_eq!(rgb.alpha(), 1.0);
+        assert!((rgb.green() - 128.0 / 255.0).abs() < 1e-6);
+
+        let hex = parse_css_color("#0000ff");
+        assert_eq!((hex.blue(), hex.alpha()), (1.0, 1.0));
+
+        let hex_alpha = parse_css_color("#00ff0080");
+        assert_eq!(hex_alpha.green(), 1.0);
+        assert!((hex_alpha.alpha() - 128.0 / 255.0).abs() < 0.01);
+
+        // Repli sur blanc opaque pour tout format inconnu.
+        let fallback = parse_css_color("tomato");
+        assert_eq!((fallback.red(), fallback.alpha()), (1.0, 1.0));
+    }
+
+    #[test]
+    fn video_frame_index_clamps_to_the_last_frame_without_loop() {
+        // Source de 2 s à 30 fps (60 frames) : à 5 s on reste figé sur la frame 60.
+        assert_eq!(video_frame_index(5.0, 30, 60, false, 0.0), 60);
+        assert_eq!(video_frame_index(0.0, 30, 60, false, 0.0), 1);
+    }
+
+    #[test]
+    fn video_frame_index_loops_back_to_the_trim_in_point() {
+        // Point d'entrée à 1 s (frame 31) : après la fin de la source (2 s), la boucle repart
+        // à la frame 31, pas à la frame 1 — même convention que la preview.
+        let idx = video_frame_index(2.0, 30, 60, true, 1.0);
+        assert_eq!(idx, 31);
+        // 2.5 s = 0.5 s après le rebouclage -> frame 31 + 15.
+        assert_eq!(video_frame_index(2.5, 30, 60, true, 1.0), 46);
+        // Sans point d'entrée, la boucle repart au début du fichier.
+        assert_eq!(video_frame_index(2.0, 30, 60, true, 0.0), 1);
+    }
+
+    fn text_element_for_render(alignment: TextAlign, background: Option<&str>) -> Project {
+        Project {
+            name: "Test".into(),
+            width: 320,
+            height: 180,
+            fps: 30,
+            duration: 2.0,
+            compositions: vec![Composition {
+                id: "c1".into(),
+                name: "Scene 1".into(),
+                start_time: 0.0,
+                duration: 2.0,
+                elements: vec![Element::Text(TextElement {
+                    base: ElementBase {
+                        id: "t1".into(),
+                        name: "Titre".into(),
+                        start_time: 0.0,
+                        duration: None,
+                        x: 10.0,
+                        y: 10.0,
+                        width: 80.0,
+                        height: 60.0,
+                        rotation: 0.0,
+                        animations: vec![],
+                        group_id: None,
+                        blend_mode: None,
+                    },
+                    content: "Hi".into(),
+                    alignment,
+                    vertical_alignment: VerticalAlign::Top,
+                    color: "rgba(255,255,255,1)".into(),
+                    background_color: background.map(str::to_string),
+                    font_size: Some(6.0),
+                    font_family: None,
+                    font_weight: None,
+                    font_style: None,
+                    letter_spacing: None,
+                    line_height: None,
+                    text_shadow: None,
+                    underline: false,
+                    strikethrough: false,
+                })],
+                transition_in: None,
+                transition_out: None,
+                overlap_next: 0.0,
+            }],
+            audio_tracks: vec![],
+        }
+    }
+
+    #[test]
+    fn text_background_color_fills_the_element_box() {
+        let project = text_element_for_render(TextAlign::Left, Some("rgba(255,0,0,1)"));
+        let mut renderer = FrameRenderer::new();
+        let frame = renderer.render_frame(&project, &std::env::temp_dir(), 1.0);
+        // Coin bas-droit de la boîte du texte (90% de 320 = 288, 70% de 180 = 126) : loin des
+        // glyphes, mais couvert par le fond de l'élément.
+        let px = frame.pixel(280, 120).unwrap();
+        assert!(
+            px.red() > 200 && px.green() < 50,
+            "le fond de l'élément texte doit être rendu à l'export (pixel: {px:?})"
+        );
+    }
+
+    #[test]
+    fn text_alignment_shifts_glyphs_horizontally() {
+        let mut renderer = FrameRenderer::new();
+        let dir = std::env::temp_dir();
+
+        let leftmost_glyph_x = |frame: &Pixmap| -> Option<u32> {
+            for px in 0..frame.width() {
+                for py in 0..frame.height() {
+                    if frame.pixel(px, py).unwrap().red() > 50 {
+                        return Some(px);
+                    }
+                }
+            }
+            None
+        };
+
+        let left =
+            renderer.render_frame(&text_element_for_render(TextAlign::Left, None), &dir, 1.0);
+        let right =
+            renderer.render_frame(&text_element_for_render(TextAlign::Right, None), &dir, 1.0);
+        let (lx, rx) = (
+            leftmost_glyph_x(&left).expect("glyphes attendus (left)"),
+            leftmost_glyph_x(&right).expect("glyphes attendus (right)"),
+        );
+        assert!(
+            rx > lx + 50,
+            "l'alignement à droite doit décaler les glyphes vers la droite (left={lx}, right={rx})"
+        );
     }
 }

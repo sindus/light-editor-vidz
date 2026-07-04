@@ -16,7 +16,9 @@ pub struct ExportOptions {
 
 /// Exporte le projet en mp4 (bloquant). `output_path` vient d'un dialogue "Enregistrer sous"
 /// côté frontend. Émet `export-progress` (fraction 0.0..1.0) après chaque frame rendue.
-#[tauri::command]
+/// `async` : l'export dure plusieurs minutes — sur le thread principal (défaut des commandes
+/// synchrones Tauri v2), il gèlerait toute l'UI, y compris la barre de progression.
+#[tauri::command(async)]
 pub fn export_project(
     app: tauri::AppHandle,
     project_dir: String,

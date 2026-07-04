@@ -15,9 +15,13 @@ export const FIT_MODES = ["cover", "stretch", "fit-largest", "fit-width", "fit-h
 export function MediaProperties({
   element,
   onUpdate,
+  activeDuration,
 }: {
   element: Extract<Element, { type: "image" | "video" }>;
   onUpdate: (patch: ElementPatch) => void;
+  /** Durée actuellement active (résolue) de l'élément — utilisée pour calculer le point de
+   * sortie vidéo, non utilisée pour les images. */
+  activeDuration: number;
 }) {
   const { t } = useTranslation();
   return (
@@ -47,24 +51,62 @@ export function MediaProperties({
       {element.type === "video" && (
         <>
           <div className="properties-section">
-            <span className="properties-label">{t("properties.videoOffset")}</span>
-            <input
-              className="properties-input mono"
-              type="number"
-              step={0.1}
-              min={0}
-              value={element.video_offset}
-              onChange={(e) => onUpdate({ video_offset: Number(e.target.value) })}
-            />
+            <span className="properties-label">{t("properties.videoTrim")}</span>
+            <div className="properties-row">
+              <label className="properties-mini-field">
+                {t("properties.videoTrimStart")}
+                <input
+                  className="properties-input mono"
+                  type="number"
+                  step={0.1}
+                  min={0}
+                  value={element.video_offset}
+                  onChange={(e) => {
+                    const newOffset = Math.max(0, Number(e.target.value));
+                    // Décaler le point d'entrée ne doit pas déplacer le point de sortie déjà
+                    // choisi : on ajuste la durée en sens inverse pour le compenser.
+                    const sourceEnd = element.video_offset + activeDuration * element.playback_speed;
+                    const newDuration = Math.max(0.1, (sourceEnd - newOffset) / element.playback_speed);
+                    onUpdate({ video_offset: newOffset, duration: newDuration });
+                  }}
+                />
+              </label>
+              <label className="properties-mini-field">
+                {t("properties.videoTrimEnd")}
+                <input
+                  className="properties-input mono"
+                  type="number"
+                  step={0.1}
+                  min={element.video_offset + 0.1}
+                  value={element.video_offset + activeDuration * element.playback_speed}
+                  onChange={(e) => {
+                    const sourceEnd = Number(e.target.value);
+                    const newDuration = Math.max(0.1, (sourceEnd - element.video_offset) / element.playback_speed);
+                    onUpdate({ duration: newDuration });
+                  }}
+                />
+              </label>
+            </div>
           </div>
           <div className="properties-section">
-            <span className="properties-label">{t("properties.volume")}</span>
+            <div className="properties-row properties-row-header">
+              <span className="properties-label">{t("properties.volume")}</span>
+              <button
+                type="button"
+                className={`properties-toggle${element.muted ? " active" : ""}`}
+                onClick={() => onUpdate({ muted: !element.muted })}
+                title={t("properties.videoSoundToggle")}
+              >
+                {element.muted ? t("properties.muted") : t("properties.mute")}
+              </button>
+            </div>
             <input
               type="range"
               min={0}
               max={1}
               step={0.01}
               value={element.volume}
+              disabled={element.muted}
               onChange={(e) => onUpdate({ volume: Number(e.target.value) })}
             />
           </div>
@@ -79,6 +121,17 @@ export function MediaProperties({
               value={element.playback_speed}
               onChange={(e) => onUpdate({ playback_speed: Number(e.target.value) })}
             />
+          </div>
+          <div className="properties-section">
+            <span className="properties-label">{t("properties.videoEndBehavior")}</span>
+            <select
+              className="properties-input"
+              value={element.loop_video ? "loop" : "freeze"}
+              onChange={(e) => onUpdate({ loop_video: e.target.value === "loop" })}
+            >
+              <option value="freeze">{t("properties.videoEndFreeze")}</option>
+              <option value="loop">{t("properties.videoEndLoop")}</option>
+            </select>
           </div>
         </>
       )}

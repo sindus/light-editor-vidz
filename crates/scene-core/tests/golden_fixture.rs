@@ -299,7 +299,6 @@ fn build_fixture() -> GoldenFixture {
                     start_time: 0.0,
                     duration,
                     elements: Vec::<Element>::new(),
-                    audio_tracks: vec![],
                     transition_in: None,
                     transition_out: None,
                     overlap_next,
@@ -312,6 +311,7 @@ fn build_fixture() -> GoldenFixture {
                 fps: 30,
                 duration: 0.0,
                 compositions,
+                audio_tracks: vec![],
             };
             recompute_start_times(&mut project);
             TimelineCase {

@@ -3,6 +3,7 @@ import type { Project } from "../bindings/Project";
 import type { Composition } from "../bindings/Composition";
 import {
   addComposition,
+  duplicateComposition,
   isElementActive,
   recomputeStartTimes,
   removeComposition,
@@ -20,7 +21,6 @@ function comp(id: string, duration: number, overlapNext = 0): Composition {
     start_time: 0,
     duration,
     elements: [],
-    audio_tracks: [],
     transition_in: null,
     transition_out: null,
     overlap_next: overlapNext,
@@ -28,8 +28,36 @@ function comp(id: string, duration: number, overlapNext = 0): Composition {
 }
 
 function project(compositions: Composition[]): Project {
-  return { name: "p", width: 1920, height: 1080, fps: 30, duration: 0, compositions };
+  return { name: "p", width: 1920, height: 1080, fps: 30, duration: 0, compositions, audio_tracks: [] };
 }
+
+describe("duplicateComposition", () => {
+  it("insère une copie profonde juste après l'originale, avec de nouveaux ids", () => {
+    const el = { ...createTitleElement(), group_id: "g1" };
+    const el2 = { ...createTitleElement(), group_id: "g1" };
+    const source = { ...comp("a", 3), elements: [el, el2] };
+    const { project: next, newId } = duplicateComposition(recomputeStartTimes(project([source, comp("b", 2)])), "a");
+    expect(newId).toBeTruthy();
+    expect(next.compositions).toHaveLength(3);
+    const copy = next.compositions[1];
+    expect(copy.id).toBe(newId);
+    expect(copy.name).toBe("a (copie)");
+    expect(copy.start_time).toBe(3);
+    // Nouveaux ids d'éléments, groupe préservé entre copies mais distinct de l'original.
+    expect(copy.elements.map((e) => e.id)).not.toContain(el.id);
+    expect(copy.elements[0].group_id).toBe(copy.elements[1].group_id);
+    expect(copy.elements[0].group_id).not.toBe("g1");
+    // La timeline globale est recalculée (3 + 3 + 2).
+    expect(next.duration).toBe(8);
+  });
+
+  it("ne fait rien pour un id inconnu", () => {
+    const p = project([comp("a", 3)]);
+    const { project: next, newId } = duplicateComposition(p, "zzz");
+    expect(newId).toBeNull();
+    expect(next).toBe(p);
+  });
+});
 
 describe("recomputeStartTimes", () => {
   it("lays out compositions sequentially without overlap", () => {

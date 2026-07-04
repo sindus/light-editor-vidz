@@ -2,8 +2,26 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Lit un média (vidéo/image/audio) et le renvoie en octets bruts plutôt que via le protocole
+/// `asset://`. Contournement pour la vidéo : WebKitGTK (webview Tauri sur Linux) rejette parfois
+/// un `<video src="asset://...">` avec `MEDIA_ERR_SRC_NOT_SUPPORTED` alors que le fichier est
+/// parfaitement lisible (GStreamer le décode sans problème en dehors de la webview) — un schéma
+/// d'URL personnalisé n'est pas toujours accepté comme source par l'élément `<video>`, contrairement
+/// à `<img>`. Charger les octets et construire une URL `blob:` côté frontend contourne le problème.
+// `async` : lire un fichier vidéo de plusieurs centaines de Mo ne doit pas bloquer le thread
+// principal (les commandes synchrones Tauri v2 y sont exécutées par défaut).
+#[tauri::command(async)]
+pub fn read_media_file(
+    project_dir: String,
+    relative_src: String,
+) -> Result<tauri::ipc::Response, String> {
+    let path = scene_core::paths::resolve_media_path(Path::new(&project_dir), &relative_src)?;
+    let bytes = fs::read(&path).map_err(|e| format!("Failed to read media file: {e}"))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 /// Sous-dossier de `assets/` dans lequel stocker ce type de média.
-fn kind_subdir(kind: &str) -> Result<&'static str, String> {
+pub(crate) fn kind_subdir(kind: &str) -> Result<&'static str, String> {
     match kind {
         "image" => Ok("images"),
         "video" => Ok("videos"),
@@ -13,7 +31,7 @@ fn kind_subdir(kind: &str) -> Result<&'static str, String> {
 }
 
 /// Évite d'écraser un fichier existant en suffixant `-2`, `-3`, ... avant l'extension.
-fn unique_destination(dir: &Path, filename: &str) -> PathBuf {
+pub(crate) fn unique_destination(dir: &Path, filename: &str) -> PathBuf {
     let mut dest = dir.join(filename);
     if !dest.exists() {
         return dest;

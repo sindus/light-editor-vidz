@@ -1,6 +1,6 @@
 [package]
 name = "light-editor-vidz"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -27,4 +27,8 @@ tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 scene-core = { path = "../crates/scene-core" }
+# Recherche/téléchargement d'assets libres de droit (Pexels, Pixabay, Freesound, Openverse).
+# rustls plutôt qu'openssl : pas de dépendance système supplémentaire au build.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+futures = "0.3"
 

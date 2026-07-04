@@ -12,6 +12,12 @@ import ExportModal from "./ExportModal";
 
 /** Miroir des raccourcis gérés par `onKeyDown` dans `Editor.tsx` — purement informatif ici. */
 const SHORTCUTS: [string, string][] = [
+  ["topbar.shortcutPlayPause", "Space"],
+  ["topbar.shortcutStepFrame", "←/→"],
+  ["topbar.shortcutStepSecond", "Shift+←/→"],
+  ["topbar.shortcutNudge", "←↑↓→"],
+  ["topbar.shortcutHomeEnd", "Home/End"],
+  ["topbar.shortcutSave", "Ctrl+S"],
   ["topbar.shortcutDelete", "Del"],
   ["topbar.shortcutDuplicate", "Ctrl+D"],
   ["topbar.shortcutCopy", "Ctrl+C"],
@@ -30,8 +36,11 @@ interface Props {
   onBack: () => void;
   onSave: () => void;
   saving: boolean;
+  /** Modifications non enregistrées (la sauvegarde automatique est en attente). */
+  dirty: boolean;
   onOpenProject: () => void;
   onImportLegacy: () => void;
+  onOpenSettings: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -47,8 +56,10 @@ export default function TopBar({
   onBack,
   onSave,
   saving,
+  dirty,
   onOpenProject,
   onImportLegacy,
+  onOpenSettings,
   onUndo,
   onRedo,
   canUndo,
@@ -63,6 +74,7 @@ export default function TopBar({
   const [exportError, setExportError] = useState<string | null>(null);
   const [version, setVersion] = useState("");
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartedAt, setExportStartedAt] = useState(0);
 
   useEffect(() => {
     getVersion()
@@ -88,6 +100,7 @@ export default function TopBar({
 
     setExporting(true);
     setExportProgress(0);
+    setExportStartedAt(performance.now());
     try {
       await exportProject(projectDir, project, outputPath, options);
       setShowExportModal(false);
@@ -120,6 +133,8 @@ export default function TopBar({
               "separator",
               { label: t("topbar.save"), onClick: onSave, shortcut: "Ctrl+S" },
               { label: t("topbar.exportEllipsis"), onClick: () => setShowExportModal(true) },
+              "separator",
+              { label: t("topbar.settings"), onClick: onOpenSettings },
             ]}
           />
           <AppMenu
@@ -171,9 +186,16 @@ export default function TopBar({
       </div>
 
       <div className="editor-topbar-right">
-        <button type="button" className="btn-topbar-secondary" onClick={onSave} disabled={saving}>
+        <button
+          type="button"
+          className="btn-topbar-secondary"
+          onClick={onSave}
+          disabled={saving}
+          title={dirty ? t("topbar.unsavedChanges") : t("topbar.allSaved")}
+        >
           <Download size={14} />
           {saving ? t("topbar.saving") : t("topbar.save")}
+          {dirty && !saving && <span className="topbar-dirty-dot" aria-label={t("topbar.unsavedChanges")} />}
         </button>
         <button
           type="button"
@@ -182,7 +204,9 @@ export default function TopBar({
           disabled={exporting}
         >
           <Upload size={14} />
-          {exporting ? `${t("topbar.exporting")} ${Math.round(exportProgress * 100)}%` : t("topbar.export")}
+          {exporting
+            ? `${t("topbar.exporting")} ${Math.round(exportProgress * 100)}%${formatEta(exportStartedAt, exportProgress)}`
+            : t("topbar.export")}
         </button>
       </div>
       {exporting && (
@@ -202,6 +226,17 @@ export default function TopBar({
       )}
     </header>
   );
+}
+
+/** " · ~2:41" : temps restant estimé par extrapolation linéaire de la progression. Vide tant
+ * que la progression est trop faible pour donner une estimation stable. */
+function formatEta(startedAt: number, progress: number): string {
+  if (progress < 0.03) return "";
+  const elapsed = (performance.now() - startedAt) / 1000;
+  const remaining = Math.max(0, (elapsed * (1 - progress)) / progress);
+  const m = Math.floor(remaining / 60);
+  const s = Math.round(remaining % 60);
+  return ` · ~${m}:${s.toString().padStart(2, "0")}`;
 }
 
 function LanguageSwitcher() {

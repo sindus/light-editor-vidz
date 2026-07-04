@@ -32,7 +32,6 @@ function emptyComposition(id: string, duration = 5): Composition {
     start_time: 0,
     duration,
     elements: [],
-    audio_tracks: [],
     transition_in: null,
     transition_out: null,
     overlap_next: 0,
@@ -40,7 +39,7 @@ function emptyComposition(id: string, duration = 5): Composition {
 }
 
 function project(compositions: Composition[]): Project {
-  return { name: "p", width: 1920, height: 1080, fps: 30, duration: 5, compositions };
+  return { name: "p", width: 1920, height: 1080, fps: 30, duration: 5, compositions, audio_tracks: [] };
 }
 
 describe("element creators", () => {
@@ -164,6 +163,24 @@ describe("splitElementInProject", () => {
     const next = splitElementInProject(p, "a", el.id, 0.01);
     expect(next.compositions[0].elements).toHaveLength(1);
   });
+
+  it("advances the right half's video_offset to keep source continuity", () => {
+    const el = {
+      ...createVideoElement("assets/videos/v.mp4", "v"),
+      start_time: 0,
+      duration: 4,
+      video_offset: 1,
+      playback_speed: 2,
+    };
+    const p = addElementToComposition(project([emptyComposition("a", 5)]), "a", el);
+    const next = splitElementInProject(p, "a", el.id, 2);
+    const [left, right] = next.compositions[0].elements;
+    if (left.type !== "video" || right.type !== "video") throw new Error("expected video halves");
+    // La moitié gauche garde son point d'entrée ; la droite reprend là où la coupe a eu lieu
+    // dans la source : offset + 2 s de timeline × vitesse 2 = 1 + 4.
+    expect(left.video_offset).toBe(1);
+    expect(right.video_offset).toBeCloseTo(5);
+  });
 });
 
 describe("deleteElementsFromProject / duplicateElementsInProject", () => {
@@ -184,6 +201,24 @@ describe("deleteElementsFromProject / duplicateElementsInProject", () => {
     const { project: next, newIds } = duplicateElementsInProject(p, [elA.id, elB.id]);
     expect(newIds).toHaveLength(2);
     expect(next.compositions[0].elements).toHaveLength(4);
+  });
+
+  it("gives duplicated group members a fresh shared group_id, distinct from the originals", () => {
+    const elA = createTitleElement();
+    const elB = createSubtitleElement();
+    let p = addElementToComposition(project([emptyComposition("a")]), "a", elA);
+    p = addElementToComposition(p, "a", elB);
+    p = groupElements(p, "a", [elA.id, elB.id]);
+    const originalGroupId = findElement(p, elA.id)?.group_id;
+
+    const { project: next, newIds } = duplicateElementsInProject(p, [elA.id, elB.id]);
+    const copies = newIds.map((id) => findElement(next, id));
+    // Les copies restent groupées entre elles…
+    expect(copies[0]?.group_id).toBeTruthy();
+    expect(copies[0]?.group_id).toBe(copies[1]?.group_id);
+    // …mais ne rejoignent pas le groupe des originaux (sinon déplacer une copie déplace l'original).
+    expect(copies[0]?.group_id).not.toBe(originalGroupId);
+    expect(findElement(next, elA.id)?.group_id).toBe(originalGroupId);
   });
 });
 

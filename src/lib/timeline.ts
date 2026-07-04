@@ -29,7 +29,6 @@ export function addComposition(project: Project): Project {
     start_time: 0,
     duration: DEFAULT_COMPOSITION_DURATION,
     elements: [],
-    audio_tracks: [],
     transition_in: null,
     transition_out: null,
     overlap_next: 0,
@@ -99,6 +98,33 @@ export function setCompositionOverlap(project: Project, compId: string, overlap:
     ...project,
     compositions: project.compositions.map((c) => (c.id === compId ? { ...c, overlap_next: clamped } : c)),
   });
+}
+
+/** Copie profonde d'une scène (nouveaux ids pour la scène, ses éléments et groupes — les
+ * pistes audio, globales au projet, ne sont pas concernées), insérée juste après l'originale. */
+export function duplicateComposition(project: Project, compId: string): { project: Project; newId: string | null } {
+  const idx = project.compositions.findIndex((c) => c.id === compId);
+  if (idx === -1) return { project, newId: null };
+  const src = project.compositions[idx];
+  const groupRemap = new Map<string, string>();
+  const copy: Composition = {
+    ...src,
+    id: crypto.randomUUID(),
+    name: `${src.name} (copie)`,
+    elements: src.elements.map((el) => {
+      let group_id = el.group_id;
+      if (group_id) {
+        if (!groupRemap.has(group_id)) groupRemap.set(group_id, crypto.randomUUID());
+        group_id = groupRemap.get(group_id)!;
+      }
+      return { ...el, id: crypto.randomUUID(), group_id, animations: el.animations.map((a) => ({ ...a })) } as Element;
+    }),
+    transition_in: src.transition_in ? { ...src.transition_in } : null,
+    transition_out: src.transition_out ? { ...src.transition_out } : null,
+  };
+  const compositions = [...project.compositions];
+  compositions.splice(idx + 1, 0, copy);
+  return { project: recomputeStartTimes({ ...project, compositions }), newId: copy.id };
 }
 
 export function removeComposition(project: Project, compId: string): Project {

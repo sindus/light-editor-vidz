@@ -11,7 +11,6 @@ function compFrom(i: number, duration: number, overlapNext: number): Composition
     start_time: 0,
     duration,
     elements: [],
-    audio_tracks: [],
     transition_in: null,
     transition_out: null,
     overlap_next: overlapNext,
@@ -33,6 +32,7 @@ describe("recomputeStartTimes golden parity with scene_core::timeline::recompute
         fps: 30,
         duration: 0,
         compositions: c.compositions.map((comp, i) => compFrom(i, comp.duration, comp.overlap_next)),
+        audio_tracks: [],
       };
       const result = recomputeStartTimes(project);
       result.compositions.forEach((comp, i) => {

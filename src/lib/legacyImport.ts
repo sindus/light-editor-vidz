@@ -241,7 +241,9 @@ function convertElement(raw: unknown, canvasWidth: number, canvasHeight: number)
       border_color: null,
       border_width: null,
       volume: 1,
+      muted: false,
       playback_speed: 1,
+      loop_video: false,
     };
   }
 
@@ -280,30 +282,10 @@ function convertComposition(
     start_time: Number(comp.startTime) || 0,
     duration: Number(comp.duration) || fallbackDuration,
     elements,
-    audio_tracks: [],
     transition_in: convertTransition(comp.transitionIn),
     transition_out: convertTransition(comp.transitionOut),
     overlap_next: Number(comp.overlapNext) || 0,
   };
-}
-
-/**
- * L'ancien format stockait les pistes audio au niveau du projet, avec un `startTime` absolu sur
- * la timeline globale. Le nouveau modèle les scope par composition avec un `start_time` relatif
- * (même convention que les éléments) : chaque piste est assignée à la composition dont la
- * fenêtre temporelle la contient (la dernière composition sert de repli au-delà de la fin).
- */
-function assignAudioTracksToCompositions(compositions: Composition[], tracks: AudioTrack[]): Composition[] {
-  if (compositions.length === 0 || tracks.length === 0) return compositions;
-  const byComposition = new Map<string, AudioTrack[]>(compositions.map((c) => [c.id, []]));
-  for (const track of tracks) {
-    const absoluteStart = track.start_time;
-    const target =
-      compositions.find((c) => absoluteStart >= c.start_time && absoluteStart < c.start_time + c.duration) ??
-      compositions[compositions.length - 1];
-    byComposition.get(target.id)?.push({ ...track, start_time: Math.max(0, absoluteStart - target.start_time) });
-  }
-  return compositions.map((c) => ({ ...c, audio_tracks: byComposition.get(c.id) ?? [] }));
 }
 
 function convertAudioTrack(raw: unknown): AudioTrack | null {
@@ -350,6 +332,9 @@ export function parseLegacyProjectJSON(raw: unknown): Project {
     height,
     fps: 30,
     duration,
-    compositions: assignAudioTracksToCompositions(finalCompositions, audioTracks),
+    compositions: finalCompositions,
+    // L'ancien format stockait déjà les pistes au niveau projet avec un startTime absolu —
+    // même convention que le modèle actuel, aucune réassignation nécessaire.
+    audio_tracks: audioTracks,
   };
 }

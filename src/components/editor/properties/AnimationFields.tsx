@@ -89,11 +89,30 @@ export function AnimationFields({ element, onUpdate }: { element: Element; onUpd
               value={anim.animation_type}
               onChange={(e) => updateAnimation(i, { animation_type: e.target.value as AnimationType })}
             >
-              {options.map((opt) => (
-                <option key={opt.type} value={opt.type}>
-                  {t(opt.labelKey)}
-                </option>
-              ))}
+              {element.type === "text" ? (
+                <>
+                  <optgroup label={t("properties.animGroupInOut")}>
+                    {ANIMATION_OPTIONS.map((opt) => (
+                      <option key={opt.type} value={opt.type}>
+                        {t(opt.labelKey)}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label={t("properties.animGroupReveal")}>
+                    {TEXT_ONLY_ANIMATION_OPTIONS.map((opt) => (
+                      <option key={opt.type} value={opt.type}>
+                        {t(opt.labelKey)}
+                      </option>
+                    ))}
+                  </optgroup>
+                </>
+              ) : (
+                options.map((opt) => (
+                  <option key={opt.type} value={opt.type}>
+                    {t(opt.labelKey)}
+                  </option>
+                ))
+              )}
             </select>
             <button
               type="button"

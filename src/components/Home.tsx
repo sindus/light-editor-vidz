@@ -37,12 +37,6 @@ export default function Home({ onOpenProject }: Props) {
 
   return (
     <div className="home">
-      <div className="home-titlebar">
-        <span className="dot dot-red" />
-        <span className="dot dot-yellow" />
-        <span className="dot dot-green" />
-      </div>
-
       <main className="home-content">
         <div className="home-brand">
           <div className="home-logo">

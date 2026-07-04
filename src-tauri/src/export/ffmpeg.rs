@@ -95,6 +95,9 @@ pub struct AudioMixInput {
     /// avec la vitesse appliquée aux frames vidéo (`playback_speed`), sous peine de désynchro
     /// audio/vidéo progressive sur les clips accélérés/ralentis.
     pub speed: f64,
+    /// Si la source est plus courte que `duration`, la boucler plutôt que de laisser le silence
+    /// pour le reste — doit suivre le même choix que la vidéo (`VideoElement.loop_video`).
+    pub loop_audio: bool,
 }
 
 /// Chaîne de filtres `atempo` équivalente à `speed`, en décomposant en facteurs dans
@@ -157,6 +160,9 @@ pub fn mux_audio(
     let mut cmd = Command::new(ffmpeg_binary());
     cmd.args(["-y", "-i"]).arg(video_path);
     for input in inputs {
+        if input.loop_audio {
+            cmd.args(["-stream_loop", "-1"]);
+        }
         cmd.args(["-ss", &input.offset.max(0.0).to_string(), "-i"])
             .arg(&input.path);
     }
@@ -171,6 +177,12 @@ pub fn mux_audio(
         // être stabilisée avant de le positionner sur la timeline globale.
         let speed = input.speed.clamp(0.1, 4.0);
         let mut chain = format!("[{idx}:a]");
+        if input.loop_audio {
+            // Le flux est bouclé à l'infini par `-stream_loop -1` côté entrée ; on le retaille
+            // ici à la durée réellement consommée en temps source (avant le changement de
+            // tempo), sous peine d'un mix `amix`/`-shortest` qui ne se termine jamais.
+            chain.push_str(&format!("atrim=duration={},", input.duration * speed));
+        }
         if (speed - 1.0).abs() > 0.001 {
             chain.push_str(&atempo_chain(speed));
             chain.push(',');

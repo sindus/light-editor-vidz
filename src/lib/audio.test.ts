@@ -3,11 +3,9 @@ import type { Project } from "../bindings/Project";
 import type { Composition } from "../bindings/Composition";
 import {
   addAudioTrackToProject,
-  allAudioTracksWithTiming,
   createAudioTrack,
   duplicateAudioTrackInProject,
   findAudioTrack,
-  findAudioTrackCompositionId,
   isAudioTrackActive,
   isTrackAudible,
   removeAudioTrackFromProject,
@@ -21,7 +19,6 @@ function emptyComposition(id: string, startTime: number, duration = 5): Composit
     start_time: startTime,
     duration,
     elements: [],
-    audio_tracks: [],
     transition_in: null,
     transition_out: null,
     overlap_next: 0,
@@ -29,27 +26,28 @@ function emptyComposition(id: string, startTime: number, duration = 5): Composit
 }
 
 function project(compositions: Composition[] = [emptyComposition("c1", 0)]): Project {
-  return { name: "p", width: 1920, height: 1080, fps: 30, duration: 10, compositions };
+  return { name: "p", width: 1920, height: 1080, fps: 30, duration: 10, compositions, audio_tracks: [] };
 }
 
 describe("createAudioTrack", () => {
-  it("creates a track with sensible defaults", () => {
+  it("creates a track with sensible defaults (global, whole project)", () => {
     const track = createAudioTrack("assets/audio/a.mp3", "a.mp3");
     expect(track.src).toBe("assets/audio/a.mp3");
     expect(track.volume).toBe(1);
     expect(track.start_time).toBe(0);
+    // duration null = joue jusqu'à la fin du projet.
+    expect(track.duration).toBeNull();
   });
 });
 
 describe("addAudioTrackToProject / findAudioTrack / removeAudioTrackFromProject", () => {
-  it("adds a track to the targeted composition only, finds it, and removes it", () => {
+  it("adds a project-level track (not tied to any scene), finds it, and removes it", () => {
     const p = project([emptyComposition("a", 0), emptyComposition("b", 5)]);
     const track = createAudioTrack("a.mp3", "a.mp3");
-    let next = addAudioTrackToProject(p, "b", track);
-    expect(next.compositions[0].audio_tracks).toHaveLength(0);
-    expect(next.compositions[1].audio_tracks).toHaveLength(1);
+    let next = addAudioTrackToProject(p, track);
+    expect(next.audio_tracks).toHaveLength(1);
+    // Les scènes ne portent aucune piste : une piste peut s'étaler sur plusieurs scènes.
     expect(findAudioTrack(next, track.id)?.id).toBe(track.id);
-    expect(findAudioTrackCompositionId(next, track.id)).toBe("b");
     next = removeAudioTrackFromProject(next, track.id);
     expect(findAudioTrack(next, track.id)).toBeNull();
   });
@@ -60,11 +58,11 @@ describe("addAudioTrackToProject / findAudioTrack / removeAudioTrackFromProject"
 });
 
 describe("updateAudioTrackInProject", () => {
-  it("merges a patch into the matching track only, across compositions", () => {
+  it("merges a patch into the matching track only", () => {
     const trackA = createAudioTrack("a.mp3", "a");
     const trackB = createAudioTrack("b.mp3", "b");
-    let p = addAudioTrackToProject(project(), "c1", trackA);
-    p = addAudioTrackToProject(p, "c1", trackB);
+    let p = addAudioTrackToProject(project(), trackA);
+    p = addAudioTrackToProject(p, trackB);
     const next = updateAudioTrackInProject(p, trackA.id, { volume: 0.4 });
     expect(findAudioTrack(next, trackA.id)?.volume).toBe(0.4);
     expect(findAudioTrack(next, trackB.id)?.volume).toBe(1);
@@ -74,22 +72,18 @@ describe("updateAudioTrackInProject", () => {
 describe("duplicateAudioTrackInProject", () => {
   it("inserts a copy right after the original with a new id", () => {
     const track = createAudioTrack("a.mp3", "a");
-    const p = addAudioTrackToProject(project(), "c1", track);
+    const p = addAudioTrackToProject(project(), track);
     const { project: next, newId } = duplicateAudioTrackInProject(p, track.id);
-    expect(next.compositions[0].audio_tracks).toHaveLength(2);
-    expect(next.compositions[0].audio_tracks[1].id).toBe(newId);
+    expect(next.audio_tracks).toHaveLength(2);
+    expect(next.audio_tracks[1].id).toBe(newId);
+    expect(next.audio_tracks[1].id).not.toBe(track.id);
   });
-});
 
-describe("allAudioTracksWithTiming", () => {
-  it("converts each track's relative start_time to an absolute timeline position", () => {
-    const trackA = { ...createAudioTrack("a.mp3", "a"), start_time: 1 };
-    const trackB = { ...createAudioTrack("b.mp3", "b"), start_time: 2 };
-    let p = addAudioTrackToProject(project([emptyComposition("a", 0), emptyComposition("b", 10)]), "a", trackA);
-    p = addAudioTrackToProject(p, "b", trackB);
-    const flattened = allAudioTracksWithTiming(p);
-    expect(flattened.find((t) => t.track.id === trackA.id)?.absoluteStartTime).toBe(1);
-    expect(flattened.find((t) => t.track.id === trackB.id)?.absoluteStartTime).toBe(12);
+  it("does nothing for an unknown id", () => {
+    const p = project();
+    const { project: next, newId } = duplicateAudioTrackInProject(p, "zzz");
+    expect(newId).toBeNull();
+    expect(next).toBe(p);
   });
 });
 

@@ -18,6 +18,12 @@ pub struct Project {
     pub fps: u32,
     pub duration: f64,
     pub compositions: Vec<Composition>,
+    /// Pistes audio globales au projet : contrairement aux éléments, une piste n'appartient pas
+    /// à une scène — son `start_time` est absolu sur la timeline du projet et elle peut couvrir
+    /// plusieurs scènes ou toute la vidéo. `serde(default)` : les anciens projets stockaient les
+    /// pistes par scène (voir la migration dans `project::from_json`).
+    #[serde(default)]
+    pub audio_tracks: Vec<AudioTrack>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -29,9 +35,6 @@ pub struct Composition {
     pub start_time: f64,
     pub duration: f64,
     pub elements: Vec<Element>,
-    /// Piste(s) audio de la scène. `AudioTrack.start_time` est relatif au début de cette
-    /// composition (même convention que `ElementBase.start_time`), pas à la timeline globale.
-    pub audio_tracks: Vec<AudioTrack>,
     pub transition_in: Option<Transition>,
     pub transition_out: Option<Transition>,
     /// Chevauchement temporel (secondes) avec la composition suivante, pour les fondus-enchaînés.
@@ -132,8 +135,18 @@ pub struct VideoElement {
     pub border_width: Option<f64>,
     /// 0.0 à 1.0, indépendant du volume global des pistes audio.
     pub volume: f64,
+    /// Coupe le son embarqué de la vidéo (preview et export) sans toucher au réglage de
+    /// `volume` — permet de réactiver le son au niveau précédent.
+    /// `serde(default)` : champ ajouté après les premiers projets enregistrés, son absence
+    /// dans un `project.json` existant vaut `false` (rétro-compatibilité).
+    #[serde(default)]
+    pub muted: bool,
     /// 1.0 = vitesse normale.
     pub playback_speed: f64,
+    /// Si la source vidéo est plus courte que la durée active de l'élément : `true` la boucle,
+    /// `false` fige sur la dernière frame. `serde(default)` : même raison que `muted`.
+    #[serde(default)]
+    pub loop_video: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -160,9 +173,10 @@ pub struct AudioTrack {
     pub id: String,
     pub name: String,
     pub src: String,
-    /// Relatif au début de la composition qui contient cette piste (même convention que
-    /// `ElementBase.start_time`).
+    /// Absolu sur la timeline globale du projet (les pistes ne sont pas rattachées à une
+    /// scène et peuvent en couvrir plusieurs).
     pub start_time: f64,
+    /// None = joue jusqu'à la fin du projet.
     pub duration: Option<f64>,
     pub volume: f64,
     pub audio_offset: f64,

@@ -16,43 +16,33 @@ pub struct ExportOverrides {
     pub crf: Option<u32>,
 }
 
-/// Entrées de mixage pour les pistes audio des compositions (hors audio embarqué des éléments
-/// vidéo, géré séparément dans `export_video`) : chaque piste a un `start_time` relatif à sa
-/// composition, converti ici en position absolue sur la timeline globale
-/// (`composition.start_time + track.start_time`). Une piste dont le `src` ne résout pas vers un
-/// fichier réel à l'intérieur de `project_dir` (fichier manquant, ou chemin tentant de sortir du
-/// dossier projet — voir `scene_core::paths::resolve_media_path`) est silencieusement ignorée,
-/// comme le reste de l'export lorsqu'une source média est introuvable.
-fn collect_composition_audio_inputs(project: &Project, project_dir: &Path) -> Vec<AudioMixInput> {
-    let any_solo = project
-        .compositions
-        .iter()
-        .flat_map(|c| &c.audio_tracks)
-        .any(|track| track.solo);
+/// Entrées de mixage pour les pistes audio du projet (hors audio embarqué des éléments vidéo,
+/// géré séparément dans `export_video`) : les pistes sont globales, leur `start_time` est déjà
+/// absolu sur la timeline. Une piste dont le `src` ne résout pas vers un fichier réel à
+/// l'intérieur de `project_dir` (fichier manquant, ou chemin tentant de sortir du dossier
+/// projet — voir `scene_core::paths::resolve_media_path`) est silencieusement ignorée, comme le
+/// reste de l'export lorsqu'une source média est introuvable.
+fn collect_project_audio_inputs(project: &Project, project_dir: &Path) -> Vec<AudioMixInput> {
+    let any_solo = project.audio_tracks.iter().any(|track| track.solo);
     project
-        .compositions
+        .audio_tracks
         .iter()
-        .flat_map(|composition| {
-            composition
-                .audio_tracks
-                .iter()
-                .filter(move |track| !track.muted && (!any_solo || track.solo))
-                .filter_map(move |track| {
-                    let path =
-                        scene_core::paths::resolve_media_path(project_dir, &track.src).ok()?;
-                    Some(AudioMixInput {
-                        path,
-                        offset: track.audio_offset,
-                        start_time: composition.start_time + track.start_time,
-                        volume: track.volume,
-                        fade_in: track.fade_in.max(0.0),
-                        fade_out: track.fade_out.max(0.0),
-                        duration: track
-                            .duration
-                            .unwrap_or(composition.duration - track.start_time),
-                        speed: 1.0,
-                    })
-                })
+        .filter(|track| !track.muted && (!any_solo || track.solo))
+        .filter_map(|track| {
+            let path = scene_core::paths::resolve_media_path(project_dir, &track.src).ok()?;
+            Some(AudioMixInput {
+                path,
+                offset: track.audio_offset,
+                start_time: track.start_time,
+                volume: track.volume,
+                fade_in: track.fade_in.max(0.0),
+                fade_out: track.fade_out.max(0.0),
+                duration: track
+                    .duration
+                    .unwrap_or(project.duration - track.start_time),
+                speed: 1.0,
+                loop_audio: false,
+            })
         })
         .collect()
 }
@@ -97,7 +87,7 @@ pub fn export_video(
     }
     encoder.finish()?;
 
-    let mut audio_inputs = collect_composition_audio_inputs(project, project_dir);
+    let mut audio_inputs = collect_project_audio_inputs(project, project_dir);
 
     // Audio embarqué des éléments vidéo : ffmpeg peut sélectionner la piste audio d'une
     // source vidéo directement (`[idx:a]`), donc pas besoin d'extraction séparée — seulement
@@ -107,7 +97,7 @@ pub fn export_video(
             let Element::Video(video_el) = el else {
                 continue;
             };
-            if video_el.volume <= 0.001 {
+            if video_el.muted || video_el.volume <= 0.001 {
                 continue;
             }
             let Ok(source_path) = scene_core::paths::resolve_media_path(project_dir, &video_el.src)
@@ -137,6 +127,7 @@ pub fn export_video(
                 fade_out: 0.0,
                 duration: active_duration,
                 speed,
+                loop_audio: video_el.loop_video,
             });
         }
     }
@@ -152,19 +143,13 @@ mod tests {
     use super::*;
     use scene_core::model::*;
 
-    fn empty_composition(
-        id: &str,
-        start_time: f64,
-        duration: f64,
-        audio_tracks: Vec<AudioTrack>,
-    ) -> Composition {
+    fn empty_composition(id: &str, start_time: f64, duration: f64) -> Composition {
         Composition {
             id: id.into(),
             name: id.into(),
             start_time,
             duration,
             elements: vec![],
-            audio_tracks,
             transition_in: None,
             transition_out: None,
             overlap_next: 0.0,
@@ -187,7 +172,7 @@ mod tests {
         }
     }
 
-    // `collect_composition_audio_inputs` résout désormais chaque `src` sur disque (protection
+    // `collect_project_audio_inputs` résout désormais chaque `src` sur disque (protection
     // contre les chemins qui sortiraient du dossier projet, voir `scene_core::paths`), donc les
     // tests doivent pointer vers des fichiers réels plutôt qu'un dossier fictif.
     fn temp_dir_with_files(test_name: &str, file_names: &[&str]) -> std::path::PathBuf {
@@ -207,10 +192,12 @@ mod tests {
     }
 
     #[test]
-    fn audio_track_start_time_is_relative_to_its_own_composition() {
-        // La 2e composition démarre à t=5 sur la timeline globale ; sa piste audio, avec un
-        // start_time relatif de 1s, doit finir mixée à t=6 (pas t=1).
-        let dir = temp_dir_with_files("audio-relative-start", &["a1.mp3"]);
+    fn audio_tracks_are_global_and_can_span_multiple_scenes() {
+        // Piste posée à t=1 (absolu) sans durée : elle couvre les deux scènes jusqu'à la fin
+        // du projet, indépendamment du découpage en scènes.
+        let dir = temp_dir_with_files("audio-global", &["a1.mp3"]);
+        let mut track = audio_track("a1", 1.0);
+        track.duration = None;
         let project = Project {
             name: "p".into(),
             width: 100,
@@ -218,13 +205,16 @@ mod tests {
             fps: 30,
             duration: 10.0,
             compositions: vec![
-                empty_composition("c1", 0.0, 5.0, vec![]),
-                empty_composition("c2", 5.0, 5.0, vec![audio_track("a1", 1.0)]),
+                empty_composition("c1", 0.0, 5.0),
+                empty_composition("c2", 5.0, 5.0),
             ],
+            audio_tracks: vec![track],
         };
-        let inputs = collect_composition_audio_inputs(&project, &dir);
+        let inputs = collect_project_audio_inputs(&project, &dir);
         assert_eq!(inputs.len(), 1);
-        assert_eq!(inputs[0].start_time, 6.0);
+        assert_eq!(inputs[0].start_time, 1.0);
+        // Durée par défaut : jusqu'à la fin du projet (10 - 1), pas de la scène.
+        assert_eq!(inputs[0].duration, 9.0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -243,14 +233,10 @@ mod tests {
             height: 100,
             fps: 30,
             duration: 5.0,
-            compositions: vec![empty_composition(
-                "c1",
-                0.0,
-                5.0,
-                vec![solo_track, muted_track, regular_track],
-            )],
+            compositions: vec![empty_composition("c1", 0.0, 5.0)],
+            audio_tracks: vec![solo_track, muted_track, regular_track],
         };
-        let inputs = collect_composition_audio_inputs(&project, &dir);
+        let inputs = collect_project_audio_inputs(&project, &dir);
         assert_eq!(inputs.len(), 1, "seule la piste solo doit être mixée");
         assert!(inputs[0].path.ends_with("solo.mp3"));
         let _ = std::fs::remove_dir_all(&dir);
@@ -265,14 +251,10 @@ mod tests {
             height: 100,
             fps: 30,
             duration: 5.0,
-            compositions: vec![empty_composition(
-                "c1",
-                0.0,
-                5.0,
-                vec![audio_track("../etc/passwd", 0.0)],
-            )],
+            compositions: vec![empty_composition("c1", 0.0, 5.0)],
+            audio_tracks: vec![audio_track("../etc/passwd", 0.0)],
         };
-        let inputs = collect_composition_audio_inputs(&project, &dir);
+        let inputs = collect_project_audio_inputs(&project, &dir);
         assert!(
             inputs.is_empty(),
             "un src hors du dossier projet doit être ignoré, pas suivi"
@@ -327,11 +309,11 @@ mod tests {
                     gradient_to: None,
                     gradient_angle: None,
                 })],
-                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
+            audio_tracks: vec![],
         };
 
         let output_path = dir.join("out.mp4");
@@ -412,11 +394,11 @@ mod tests {
                 start_time: 0.0,
                 duration: 0.5,
                 elements: vec![],
-                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
+            audio_tracks: vec![],
         };
 
         let output_path = dir.join("out.mp4");
@@ -534,13 +516,15 @@ mod tests {
                     border_color: None,
                     border_width: None,
                     volume: 1.0,
+                    muted: false,
                     playback_speed: 1.0,
+                    loop_video: false,
                 })],
-                audio_tracks: vec![],
                 transition_in: None,
                 transition_out: None,
                 overlap_next: 0.0,
             }],
+            audio_tracks: vec![],
         };
 
         let output_path = dir.join("out.mp4");
@@ -571,6 +555,41 @@ mod tests {
         assert!(
             info.contains("aac"),
             "le mp4 exporté doit contenir la piste audio du clip vidéo : {info}"
+        );
+
+        // Même projet avec l'élément vidéo muet : son audio ne doit pas être mixé.
+        let mut muted_project = project.clone();
+        let Element::Video(video_el) = &mut muted_project.compositions[0].elements[0] else {
+            unreachable!();
+        };
+        video_el.muted = true;
+        let muted_output = dir.join("out-muted.mp4");
+        export_video(
+            &muted_project,
+            &dir,
+            &muted_output,
+            ExportOverrides::default(),
+            |_| {},
+        )
+        .expect("muted export should succeed");
+        let probe = std::process::Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(&muted_output)
+            .output()
+            .expect("ffprobe doit être disponible");
+        assert!(
+            probe.stdout.is_empty(),
+            "un élément vidéo muet ne doit apporter aucune piste audio : {}",
+            String::from_utf8_lossy(&probe.stdout)
         );
 
         let _ = std::fs::remove_dir_all(&dir);

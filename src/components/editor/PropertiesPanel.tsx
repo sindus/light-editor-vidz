@@ -16,6 +16,9 @@ interface Props {
   onUpdate: (patch: ElementPatch) => void;
   onUpdateAudio: (patch: Partial<AudioTrack>) => void;
   onReorder: (direction: 1 | -1) => void;
+  /** Durée de la composition active — repli pour calculer le point de sortie d'une vidéo quand
+   * `element.duration` est `null` (l'élément dure jusqu'à la fin de la scène). */
+  activeCompositionDuration: number;
   elements: Element[];
   selectedIds: string[];
   onSelectLayer: (id: string, additive: boolean) => void;
@@ -33,6 +36,7 @@ export default function PropertiesPanel({
   onUpdate,
   onUpdateAudio,
   onReorder,
+  activeCompositionDuration,
   elements,
   selectedIds,
   onSelectLayer,
@@ -104,7 +108,11 @@ export default function PropertiesPanel({
           </div>
           {element.type === "text" && <TextProperties element={element} onUpdate={onUpdate} />}
           {(element.type === "image" || element.type === "video") && (
-            <MediaProperties element={element} onUpdate={onUpdate} />
+            <MediaProperties
+              element={element}
+              onUpdate={onUpdate}
+              activeDuration={element.duration ?? activeCompositionDuration - element.start_time}
+            />
           )}
           {element.type === "shape" && <ShapeProperties element={element} onUpdate={onUpdate} />}
           {layers}

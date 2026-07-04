@@ -17,6 +17,9 @@ pub fn run() {
             commands::project::read_text_file,
             commands::assets::import_asset,
             commands::assets::list_assets,
+            commands::assets::read_media_file,
+            commands::stock::search_stock_assets,
+            commands::stock::import_stock_asset,
             commands::export::export_project,
         ])
         .run(tauri::generate_context!())

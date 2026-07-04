@@ -53,13 +53,14 @@ export function AudioProperties({
       </div>
 
       <div className="properties-section">
-        <span className="properties-label">{t("properties.position")} (s)</span>
+        <span className="properties-label">{t("properties.audioOffset")}</span>
         <input
           className="properties-input mono"
           type="number"
           step={0.1}
+          min={0}
           value={track.audio_offset}
-          onChange={(e) => onUpdate({ audio_offset: Number(e.target.value) })}
+          onChange={(e) => onUpdate({ audio_offset: Math.max(0, Number(e.target.value)) })}
         />
       </div>
 
